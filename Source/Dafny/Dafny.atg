@@ -1020,7 +1020,7 @@ DatatypeDecl<DeclModifierData dmod, ModuleDefinition/*!*/ module, out DatatypeDe
   NoUSIdent<out id>
   [ GenericParameters<typeArgs> ]
   "="                                      (. bodyStart = t; .)
-  DatatypeMemberDecl<ctors>
+  ["|"] DatatypeMemberDecl<ctors>
   { "|" DatatypeMemberDecl<ctors> }
   [ SYNC ";"
       // This semi-colon used to be required, but it seems silly to have it.
@@ -1467,7 +1467,7 @@ Formals<.bool incoming, bool allowGhostKeyword, bool allowNewKeyword, List<Forma
   .)
   "("
   [
-    GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
+    [","] GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
                  (. formals.Add(new Formal(id, id.val, ty, incoming, isGhost, isOld)); .)
     { "," GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
                  (. formals.Add(new Formal(id, id.val, ty, incoming, isGhost, isOld)); .)
@@ -1479,7 +1479,7 @@ FormalsOptionalIds<.List<Formal/*!*/>/*!*/ formals.>
 = (. Contract.Requires(cce.NonNullElements(formals)); IToken/*!*/ id;  Type/*!*/ ty;  string/*!*/ name;  bool isGhost; .)
   "("
   [
-    TypeIdentOptional<out id, out name, out ty, out isGhost>        (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
+    [","] TypeIdentOptional<out id, out name, out ty, out isGhost>  (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
     { "," TypeIdentOptional<out id, out name, out ty, out isGhost>  (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
     }
   ]
@@ -1563,7 +1563,7 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
                                        ty = theBuiltIns.ArrayType(tok, dims, gt, true);
                                     .)
   | "("                             (. tok = t; tupleArgTypes = new List<Type>(); .)
-    [ Type<out ty>                  (. tupleArgTypes.Add(ty); .)
+    [ [","] Type<out ty>            (. tupleArgTypes.Add(ty); .)
       { "," Type<out ty>            (. tupleArgTypes.Add(ty); .)
       }
     ]
@@ -2066,7 +2066,7 @@ VarDeclStatement<.out Statement/*!*/ s.>
                                        Expression e = dummyExpr;
                                        IToken id = t;
                                     .)
-      [ CasePattern<out pat>            (. arguments.Add(pat); .)
+      [ [","] CasePattern<out pat>      (. arguments.Add(pat); .)
         { "," CasePattern<out pat>      (. arguments.Add(pat); .)
         }
       ]
@@ -2313,13 +2313,13 @@ CaseStatement<out MatchCaseStmt/*!*/ c>
   "case"                      (. x = t; .)
   ( Ident<out id>             (. name = id.val; .)
     [ "("
-       [ CasePattern<out pat>        (. arguments.Add(pat); .)
+       [ [","] CasePattern<out pat>  (. arguments.Add(pat); .)
          { "," CasePattern<out pat>  (. arguments.Add(pat); .)
          }
        ]
     ")" ]
   | "("
-      CasePattern<out pat>        (. arguments.Add(pat); .)
+      [","] CasePattern<out pat>  (. arguments.Add(pat); .)
       { "," CasePattern<out pat>  (. arguments.Add(pat); .)
       }
     ")"
@@ -2662,6 +2662,7 @@ ImpliesExpression<out Expression e0, bool allowSemi, bool allowLambda, bool allo
 /*------------------------------------------------------------------------*/
 LogicalExpression<out Expression e0, bool allowSemi, bool allowLambda, bool allowBitwiseOps>
 = (. Contract.Ensures(Contract.ValueAtReturn(out e0) != null); IToken/*!*/ x;  Expression/*!*/ e1; .)
+  [ AndOp | OrOp ]
   RelationalExpression<out e0, allowSemi, allowLambda, allowBitwiseOps>
   [ IF(IsAndOp() || IsOrOp())  /* read a LogicalExpression as far as possible */
     ( AndOp                                                   (. x = t; .)
@@ -2963,7 +2964,7 @@ ConstAtomExpression<out Expression e, bool allowSemi, bool allowLambda>
     "(" Expression<out e, true, true> ")"      (. e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Allocated, e); .)
   | "unchanged"                                (. x = t; FrameExpression fe; var mod = new List<FrameExpression>(); .)
     "(" 
-      FrameExpression<out fe, false, false>         (. mod.Add(fe); .)
+      [","] FrameExpression<out fe, false, false>   (. mod.Add(fe); .)
       { "," FrameExpression<out fe, false, false>   (. mod.Add(fe); .)
       }
     ")"                                        (. e = new UnchangedExpr(x, mod); .)
@@ -3000,7 +3001,7 @@ LambdaExpression<out Expression e, bool allowSemi, bool allowBitwiseOps>
   ( WildIdent<out id, true>                  (. x = t; bvs.Add(new BoundVar(id, id.val, new InferredTypeProxy())); .)
   | "("                                      (. x = t; .)
       [
-        IdentTypeOptional<out bv>            (. bvs.Add(bv); .)
+        [","] IdentTypeOptional<out bv>      (. bvs.Add(bv); .)
         { "," IdentTypeOptional<out bv>      (. bvs.Add(bv); .)
         }
       ]
@@ -3231,7 +3232,7 @@ CaseExpression<out MatchCaseExpr c, bool allowSemi, bool allowLambda, bool allow
   "case"                      (. x = t; .)
   ( Ident<out id>             (. name = id.val; .)
     [ "("
-       [ CasePattern<out pat>        (. arguments.Add(pat); .)
+       [ [","] CasePattern<out pat>  (. arguments.Add(pat); .)
          { "," CasePattern<out pat>  (. arguments.Add(pat); .)
          }
        ]
@@ -3253,7 +3254,7 @@ CasePattern<out CasePattern pat>
   ( IF(IsIdentParen())
     Ident<out id>
     "("                                (. arguments = new List<CasePattern>(); .)
-      [ CasePattern<out pat>           (. arguments.Add(pat); .)
+      [ [","] CasePattern<out pat>     (. arguments.Add(pat); .)
         { "," CasePattern<out pat>     (. arguments.Add(pat); .)
         }
       ]
@@ -3261,7 +3262,7 @@ CasePattern<out CasePattern pat>
   | "("                                (. id = t;                                                           
                                           arguments = new List<CasePattern>(); 
                                        .)
-      [ CasePattern<out pat>           (. arguments.Add(pat); .)
+      [ [","] CasePattern<out pat>     (. arguments.Add(pat); .)
         { "," CasePattern<out pat>     (. arguments.Add(pat); .)
         }
       ]
@@ -3342,7 +3343,7 @@ Suffix<ref Expression e>
   .)
   ( "."
     ( "("                                             (. x = t; updates = new List<Tuple<IToken, string, Expression>>(); .)
-        MemberBindingUpdate<out id, out v>            (. updates.Add(Tuple.Create(id, id.val, v)); .)
+        [","] MemberBindingUpdate<out id, out v>      (. updates.Add(Tuple.Create(id, id.val, v)); .)
         { "," MemberBindingUpdate<out id, out v>      (. updates.Add(Tuple.Create(id, id.val, v)); .)
         }
       ")"
