@@ -1,4 +1,4 @@
-	/*-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------
 //
 // Copyright (C) Microsoft Corporation.  All Rights Reserved.
 //
@@ -840,22 +840,23 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
     {
        "provides"
        ( 
-         ( ModuleExportSignature<true, out exsig> 
-           (. exports.Add(exsig); .)
-           {"," ModuleExportSignature<true, out exsig>  (. exports.Add(exsig); .) }
+         ( [ "," ]
+           ModuleExportSignature<true, out exsig>        (. exports.Add(exsig); .)
+           { "," ModuleExportSignature<true, out exsig>  (. exports.Add(exsig); .) }
          )
         | "*" (. provideAll = true; .)
        )
      | "reveals"
        ( 
-         ( ModuleExportSignature<false, out exsig> 
-           (. exports.Add(exsig); .)
-           {"," ModuleExportSignature<false, out exsig>  (. exports.Add(exsig); .) }
+         ( [ "," ]
+           ModuleExportSignature<false, out exsig>       (. exports.Add(exsig); .)
+           { "," ModuleExportSignature<false, out exsig> (. exports.Add(exsig); .) }
          )
         | "*" (. revealAll = true; .)
        )
      | "extends" 
-       ModuleExport<out id>(. extends.Add(id.val); .) 
+       [","]
+       ModuleExport<out id>       (. extends.Add(id.val); .) 
        {"," ModuleExport<out id>  (. extends.Add(id.val); .) }
     }
     (.
@@ -895,7 +896,7 @@ QualifiedModuleExportSuffix<.List<IToken> ids, List<IToken> exports.>
     "." ModuleName<out id> (. ids.Add(id); .)
     { "." ModuleName<out id> (. ids.Add(id); .) }
   | "`" ( ModuleExport<out id> (. exports.Add(id); .)
-        | "{" ModuleExport<out id> (. exports.Add(id); .)
+        | "{" [ "," ] ModuleExport<out id> (. exports.Add(id); .)
           { "," ModuleExport<out id> (. exports.Add(id); .) }
           "}"
         )
@@ -931,8 +932,9 @@ ClassDecl<DeclModifierData dmodClass, ModuleDefinition/*!*/ module, out ClassDec
   (. EncodeExternAsAttribute(dmodClass, ref attrs, id, /* needAxiom */ false); .)
   [ GenericParameters<typeArgs> ]
   ["extends" 
-  Type<out trait>    (. traits.Add(trait); .) 
-  {"," Type<out trait>  (. traits.Add(trait); .) }
+  [ "," ]
+  Type<out trait>          (. traits.Add(trait); .) 
+  { "," Type<out trait>    (. traits.Add(trait); .) }
   ]         
   "{"                                            (. bodyStart = t;  .)
   { (. dmod = new DeclModifierData(); .)
@@ -1057,6 +1059,7 @@ FieldDecl<.DeclModifierData dmod, List<MemberDecl/*!*/>/*!*/ mm.>
   SYNC
   "var"
   { Attribute<ref attrs> }
+  [ "," ]
   FIdentType<out id, out ty>                        (. mm.Add(new Field(id, id.val, dmod.IsGhost, ty, attrs)); .)
   { "," FIdentType<out id, out ty>                  (. mm.Add(new Field(id, id.val, dmod.IsGhost, ty, attrs)); .)
   }
@@ -1271,7 +1274,7 @@ GenericParameters<.List<TypeParameter/*!*/>/*!*/ typeArgs.>
      IToken/*!*/ id;
      TypeParameter.EqualitySupportValue eqSupport;
   .)
-  "<"
+  "<" [ "," ]
   NoUSIdent<out id>          (. eqSupport = TypeParameter.EqualitySupportValue.Unspecified; .)
   [ "(" "==" ")"             (. eqSupport = TypeParameter.EqualitySupportValue.Required; .)
     ]                        (. typeArgs.Add(new TypeParameter(id, id.val, eqSupport)); .)
@@ -1402,6 +1405,7 @@ MethodSpec<.List<MaybeFreeExpression> req, List<FrameExpression> mod, List<Maybe
   .)
   SYNC
   ( "modifies" { IF(IsAttribute()) Attribute<ref modAttrs> }
+               [ "," ]
                FrameExpression<out fe, false, false>         (. mod.Add(fe); .)
                { "," FrameExpression<out fe, false, false>   (. mod.Add(fe); .)
                }
@@ -1426,11 +1430,13 @@ IteratorSpec<.List<FrameExpression/*!*/>/*!*/ reads, List<FrameExpression/*!*/>/
   .)
   SYNC
   ( "reads"    { IF(IsAttribute()) Attribute<ref readsAttrs> }
+               [ "," ]
                FrameExpression<out fe, false, false>       (. reads.Add(fe); .)
                { "," FrameExpression<out fe, false, false> (. reads.Add(fe); .)
                }
                OldSemi
   | "modifies" { IF(IsAttribute()) Attribute<ref modAttrs> }
+               [ "," ]
                FrameExpression<out fe, false, false>       (. mod.Add(fe); .)
                { "," FrameExpression<out fe, false, false> (. mod.Add(fe); .)
                }
@@ -1467,7 +1473,8 @@ Formals<.bool incoming, bool allowGhostKeyword, bool allowNewKeyword, List<Forma
   .)
   "("
   [
-    [","] GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
+    [ "," ]
+    GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
                  (. formals.Add(new Formal(id, id.val, ty, incoming, isGhost, isOld)); .)
     { "," GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
                  (. formals.Add(new Formal(id, id.val, ty, incoming, isGhost, isOld)); .)
@@ -1479,7 +1486,8 @@ FormalsOptionalIds<.List<Formal/*!*/>/*!*/ formals.>
 = (. Contract.Requires(cce.NonNullElements(formals)); IToken/*!*/ id;  Type/*!*/ ty;  string/*!*/ name;  bool isGhost; .)
   "("
   [
-    [","] TypeIdentOptional<out id, out name, out ty, out isGhost>  (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
+    [ "," ]
+    TypeIdentOptional<out id, out name, out ty, out isGhost>        (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
     { "," TypeIdentOptional<out id, out name, out ty, out isGhost>  (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
     }
   ]
@@ -1563,7 +1571,8 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
                                        ty = theBuiltIns.ArrayType(tok, dims, gt, true);
                                     .)
   | "("                             (. tok = t; tupleArgTypes = new List<Type>(); .)
-    [ [","] Type<out ty>            (. tupleArgTypes.Add(ty); .)
+    [ [ "," ]
+      Type<out ty>                  (. tupleArgTypes.Add(ty); .)
       { "," Type<out ty>            (. tupleArgTypes.Add(ty); .)
       }
     ]
@@ -1606,6 +1615,7 @@ OptGenericInstantiation<.out List<Type> gt, bool inExpressionContext.>  /* NOTE:
 GenericInstantiation<.List<Type> gt.>
 = (. Contract.Requires(cce.NonNullElements(gt)); Type/*!*/ ty; .)
   "<"
+    [","]
     Type<out ty>                     (. gt.Add(ty); .)
     { "," Type<out ty>               (. gt.Add(ty); .)
     }
@@ -1782,6 +1792,7 @@ FunctionSpec<.List<Expression/*!*/>/*!*/ reqs, List<FrameExpression/*!*/>/*!*/ r
   SYNC
   ( "requires" Expression<out e, false, false> OldSemi  (. reqs.Add(e); .)
   | "reads"
+    [ "," ]
     PossiblyWildFrameExpression<out fe, false>          (. reads.Add(fe); .)
     { "," PossiblyWildFrameExpression<out fe, false>    (. reads.Add(fe); .)
     }
@@ -1898,12 +1909,14 @@ SkeletonStmt<out Statement s>
      Expression e; .)
   "..."                                (. dotdotdot = t; .)
   ["where"                             (. names = new List<IToken>(); exprs = new List<Expression>(); whereTok = t;.)
+     [ "," ]
      Ident<out tok>                    (. names.Add(tok); .)
-     {"," Ident<out tok>               (. names.Add(tok); .)
+     { "," Ident<out tok>              (. names.Add(tok); .)
      }
      ":="
+     [ "," ]
      Expression<out e, false, true>          (. exprs.Add(e); .)
-     {"," Expression<out e, false, true>     (. exprs.Add(e); .)
+     { "," Expression<out e, false, true>    (. exprs.Add(e); .)
      }
                                        (. if (exprs.Count != names.Count) {
                                             SemErr(whereTok, exprs.Count < names.Count ? "not enough expressions" : "too many expressions");
@@ -1924,7 +1937,8 @@ ReturnStmt<out Statement/*!*/ s>
   ( "return"                         (. returnTok = t; .)
   | "yield"                          (. returnTok = t; isYield = true; .)
   )
-  [ Rhs<out r>                       (. rhss = new List<AssignmentRhs>(); rhss.Add(r); .)
+  [ [ "," ]
+    Rhs<out r>                       (. rhss = new List<AssignmentRhs>(); rhss.Add(r); .)
     { "," Rhs<out r>                 (. rhss.Add(r); .)
     }
   ]
@@ -1951,6 +1965,7 @@ UpdateStmt<out Statement/*!*/ s>
     { "," Lhs<out e>               (. lhss.Add(e); .)
     }
     ( ":="                         (. x = t; .)
+      [ "," ]
       Rhs<out r>                   (. rhss.Add(r); .)
       { "," Rhs<out r>             (. rhss.Add(r); .)
       }
@@ -2023,13 +2038,15 @@ VarDeclStatement<.out Statement/*!*/ s.>
   [ "ghost"                                 (. isGhost = true;  x = t; .)
   ]
   "var"                                     (. if (!isGhost) { x = t; } .)
-  ( { Attribute<ref attrs> }
+  ( [ "," ]
+    { Attribute<ref attrs> }
     LocalIdentTypeOptional<out d, isGhost>    (. lhss.Add(d); d.Attributes = attrs; attrs = null; .)
     { ","
       { Attribute<ref attrs> }
       LocalIdentTypeOptional<out d, isGhost>  (. lhss.Add(d); d.Attributes = attrs; attrs = null; .)
     }
     [ ":="                           (. assignTok = t; .)
+      [ "," ]
       Rhs<out r>                     (. rhss.Add(r); .)
       { "," Rhs<out r>               (. rhss.Add(r); .)
       }
@@ -2066,7 +2083,8 @@ VarDeclStatement<.out Statement/*!*/ s.>
                                        Expression e = dummyExpr;
                                        IToken id = t;
                                     .)
-      [ [","] CasePattern<out pat>      (. arguments.Add(pat); .)
+      [ [ "," ]
+        CasePattern<out pat>            (. arguments.Add(pat); .)
         { "," CasePattern<out pat>      (. arguments.Add(pat); .)
         }
       ]
@@ -2239,6 +2257,7 @@ LoopSpec<.List<MaybeFreeExpression> invariants, List<Expression> decreases, ref 
     OldSemi
   | SYNC "modifies"                               (. mod = mod ?? new List<FrameExpression>(); .)
     { IF(IsAttribute()) Attribute<ref modAttrs> }
+    [ "," ]
     FrameExpression<out fe, false, true>          (. mod.Add(fe); .)
     { "," FrameExpression<out fe, false, true>    (. mod.Add(fe); .)
     }
@@ -2247,6 +2266,7 @@ LoopSpec<.List<MaybeFreeExpression> invariants, List<Expression> decreases, ref 
   .
 DecreasesList<.List<Expression> decreases, bool allowWildcard, bool allowLambda.>
 = (. Expression e; .)
+  [ "," ]
   PossiblyWildExpression<out e, allowLambda> (. if (!allowWildcard && e is WildcardExpr) {
                                                   SemErr(e.tok, "'decreases *' is allowed only on loops and tail-recursive methods");
                                                 } else {
@@ -2275,6 +2295,7 @@ ExistentialGuard<out Expression e, bool allowLambda>
      Attributes attrs = null;
      Expression body;
   .)
+  [ "," ]
   IdentTypeOptional<out bv>                    (. bvars.Add(bv); x = bv.tok; .)
   { ","
     IdentTypeOptional<out bv>                  (. bvars.Add(bv); .)
@@ -2313,13 +2334,15 @@ CaseStatement<out MatchCaseStmt/*!*/ c>
   "case"                      (. x = t; .)
   ( Ident<out id>             (. name = id.val; .)
     [ "("
-       [ [","] CasePattern<out pat>  (. arguments.Add(pat); .)
+       [ [ "," ]
+         CasePattern<out pat>        (. arguments.Add(pat); .)
          { "," CasePattern<out pat>  (. arguments.Add(pat); .)
          }
        ]
     ")" ]
   | "("
-      [","] CasePattern<out pat>  (. arguments.Add(pat); .)
+      [ "," ]
+      CasePattern<out pat>        (. arguments.Add(pat); .)
       { "," CasePattern<out pat>  (. arguments.Add(pat); .)
       }
     ")"
@@ -2384,6 +2407,7 @@ PrintStmt<out Statement s>
      var args = new List<Expression>();
   .)
   "print"                                      (. x = t; .)
+  [ "," ]
   Expression<out e, false, true>               (. args.Add(e); .)
   { "," Expression<out e, false, true>         (. args.Add(e); .)
   }
@@ -2463,7 +2487,8 @@ ModifyStmt<out Statement s>
    * may also look like a BlockStmt.  We're happy to parse the former, because if the user intended
    * the latter, then an explicit FrameExpression of {} could be given.
    */
-  ( FrameExpression<out fe, false, true>       (. mod.Add(fe); .)
+  ( [ "," ]
+    FrameExpression<out fe, false, true>       (. mod.Add(fe); .)
     { "," FrameExpression<out fe, false, true> (. mod.Add(fe); .)
     }
   | "..."                               (. ellipsisToken = t; .)
@@ -2976,7 +3001,8 @@ ConstAtomExpression<out Expression e, bool allowSemi, bool allowLambda>
     "(" Expression<out e, true, true> ")"      (. e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Allocated, e); .)
   | "unchanged"                                (. x = t; FrameExpression fe; var mod = new List<FrameExpression>(); .)
     "(" 
-      [","] FrameExpression<out fe, false, false>   (. mod.Add(fe); .)
+      [ "," ]
+      FrameExpression<out fe, false, false>         (. mod.Add(fe); .)
       { "," FrameExpression<out fe, false, false>   (. mod.Add(fe); .)
       }
     ")"                                        (. e = new UnchangedExpr(x, mod); .)
@@ -3013,13 +3039,15 @@ LambdaExpression<out Expression e, bool allowSemi, bool allowBitwiseOps>
   ( WildIdent<out id, true>                  (. x = t; bvs.Add(new BoundVar(id, id.val, new InferredTypeProxy())); .)
   | "("                                      (. x = t; .)
       [
-        [","] IdentTypeOptional<out bv>      (. bvs.Add(bv); .)
+        [ "," ]
+        IdentTypeOptional<out bv>            (. bvs.Add(bv); .)
         { "," IdentTypeOptional<out bv>      (. bvs.Add(bv); .)
         }
       ]
     ")"
   )
   { "reads"
+    [ "," ]
     PossiblyWildFrameExpression<out fe, true>         (. reads.Add(fe); .)
     { ","
       PossiblyWildFrameExpression<out fe, true>       (. reads.Add(fe); .)
@@ -3096,6 +3124,7 @@ MapDisplayExpr<IToken/*!*/ mapToken, bool finite, out Expression e>
 MapLiteralExpressions<.out List<ExpressionPair> elements.>
 = (. Expression/*!*/ d, r;
      elements = new List<ExpressionPair/*!*/>(); .)
+  [ "," ]
   Expression<out d, true, true> ":=" Expression<out r, true, true>       (. elements.Add(new ExpressionPair(d,r)); .)
   { "," Expression<out d, true, true> ":=" Expression<out r, true, true> (. elements.Add(new ExpressionPair(d,r)); .)
   }
@@ -3180,6 +3209,7 @@ LetExpr<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwiseOps
     [ "ghost"                       (. isGhost = true;  x = t; .)
     ]
     "var"                           (. if (!isGhost) { x = t; } .)
+    [ "," ]
     CasePattern<out pat>            (. if (isGhost) { pat.Vars.Iter(bv => bv.IsGhost = true); }
                                        letLHSs.Add(pat);
                                     .)
@@ -3197,6 +3227,7 @@ LetExpr<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwiseOps
                                        }
                                     .)
     )
+    [ "," ]
     Expression<out e, false, true>        (. letRHSs.Add(e); .)
     { "," Expression<out e, false, true>  (. letRHSs.Add(e); .)
     }
@@ -3244,12 +3275,14 @@ CaseExpression<out MatchCaseExpr c, bool allowSemi, bool allowLambda, bool allow
   "case"                      (. x = t; .)
   ( Ident<out id>             (. name = id.val; .)
     [ "("
-       [ [","] CasePattern<out pat>  (. arguments.Add(pat); .)
+       [ [ "," ]
+         CasePattern<out pat>        (. arguments.Add(pat); .)
          { "," CasePattern<out pat>  (. arguments.Add(pat); .)
          }
        ]
     ")" ]
   | "("
+      [ "," ]
       CasePattern<out pat>        (. arguments.Add(pat); .)
       { "," CasePattern<out pat>  (. arguments.Add(pat); .)
       }
@@ -3266,7 +3299,8 @@ CasePattern<out CasePattern pat>
   ( IF(IsIdentParen())
     Ident<out id>
     "("                                (. arguments = new List<CasePattern>(); .)
-      [ [","] CasePattern<out pat>     (. arguments.Add(pat); .)
+      [ [ "," ]
+        CasePattern<out pat>           (. arguments.Add(pat); .)
         { "," CasePattern<out pat>     (. arguments.Add(pat); .)
         }
       ]
@@ -3274,7 +3308,8 @@ CasePattern<out CasePattern pat>
   | "("                                (. id = t;                                                           
                                           arguments = new List<CasePattern>(); 
                                        .)
-      [ [","] CasePattern<out pat>     (. arguments.Add(pat); .)
+      [ [ "," ]
+        CasePattern<out pat>           (. arguments.Add(pat); .)
         { "," CasePattern<out pat>     (. arguments.Add(pat); .)
         }
       ]
@@ -3355,7 +3390,8 @@ Suffix<ref Expression e>
   .)
   ( "."
     ( "("                                             (. x = t; updates = new List<Tuple<IToken, string, Expression>>(); .)
-        [","] MemberBindingUpdate<out id, out v>      (. updates.Add(Tuple.Create(id, id.val, v)); .)
+        [ "," ]
+        MemberBindingUpdate<out id, out v>            (. updates.Add(Tuple.Create(id, id.val, v)); .)
         { "," MemberBindingUpdate<out id, out v>      (. updates.Add(Tuple.Create(id, id.val, v)); .)
         }
       ")"
@@ -3382,7 +3418,8 @@ Suffix<ref Expression e>
       .)
     )
   | "["                                        (. x = t; .)
-      ( Expression<out ee, true, true>         (. e0 = ee; .)
+      ( [ "," ]
+        Expression<out ee, true, true>         (. e0 = ee; .)
         ( ".."                                 (. anyDots = true; .)
           [ Expression<out ee, true, true>     (. e1 = ee; .)
           ]
@@ -3483,6 +3520,7 @@ QuantifierDomain<.out List<BoundVar> bvars, out Attributes attrs, out Expression
      attrs = null;
      range = null;
   .)
+  [ "," ]
   IdentTypeOptional<out bv>                    (. bvars.Add(bv); .)
   { ","
     IdentTypeOptional<out bv>                  (. bvars.Add(bv); .)
@@ -3502,6 +3540,7 @@ SetComprehensionExpr<IToken setToken, bool finite, out Expression q, bool allowS
      Expression body = null;
      Attributes attrs = null;
   .)
+  [ "," ]
   IdentTypeOptional<out bv>                    (. bvars.Add(bv); .)
   { ","
     IdentTypeOptional<out bv>                  (. bvars.Add(bv); .)
@@ -3518,6 +3557,7 @@ SetComprehensionExpr<IToken setToken, bool finite, out Expression q, bool allowS
   .
 Expressions<.List<Expression> args.>
 = (. Expression e; .)
+  [ "," ]
   Expression<out e, true, true>                      (. args.Add(e); .)
   { "," Expression<out e, true, true>                (. args.Add(e); .)
   }
