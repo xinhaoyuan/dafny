@@ -855,9 +855,9 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
         | "*" (. revealAll = true; .)
        )
      | "extends" 
-       [","]
+       [ "," ]
        ModuleExport<out id>       (. extends.Add(id.val); .) 
-       {"," ModuleExport<out id>  (. extends.Add(id.val); .) }
+       { "," ModuleExport<out id> (. extends.Add(id.val); .) }
     }
     (.
        if (exportId.val == "export" || exportId.val == parent.Name) {
