@@ -1,4 +1,3 @@
-
 # ###############################################################################
 # The frame files are no longer in this directory. They must be downloaded
 # from http://boogiepartners.codeplex.com/. Update the FRAME_DIR variable to
@@ -17,4 +16,4 @@ Parser.cs: $(FRAME_DIR)/Scanner.frame $(FRAME_DIR)/Parser.frame Dafny.atg
 	$(COCO) Dafny.atg -namespace Microsoft.Dafny -frames $(FRAME_DIR)
 
 clean:
-	@-rm Scanner.cs Scanner.cs.old Parser.cs Parser.cs.old
+	@-rm -f Scanner.cs Scanner.cs.old Parser.cs Parser.cs.old

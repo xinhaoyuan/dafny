@@ -1,14 +1,12 @@
-// Dafny program verifier version 1.9.8.30829, Copyright (c) 2003-2016, Microsoft.
-// Command Line Options: -nologo -countVerificationErrors:0 -useBaseNameForFileName /rprint:- C:\dafny\Test\dafny0\PrefixTypeSubst.dfy
 // PrefixTypeSubst.dfy
 
 /*
 module _System {
   /* CALL GRAPH for module _System:
    */
-  type string = seq<char>
+  type string(==) = seq<char>
 
-  type {:axiom} nat = x: int | 0 <= x
+  type {:axiom} nat(==) = x: int | 0 <= x
 
   trait {:compile false} object { }
 
@@ -47,6 +45,8 @@ module _System {
     function reads(x0: T0): set<object>
       reads reads(x0)
   }
+
+  datatype _tuple#0 = _#Make0
 
   datatype {:compile false} _tuple#2<T0, T1> = _#Make2(0: T0, 1: T1)
 }
