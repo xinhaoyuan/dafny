@@ -2564,7 +2564,35 @@ namespace Microsoft.Dafny {
     public Declaration ClonedFrom { 
       get {
         return this.clonedFrom;
-      } 
+      }
+    }
+
+    // <xinhaoyuan@gmail.com> cache the origin of the ClonedFrom chain
+    private Declaration _cachedOrigin;
+    public Declaration Origin
+    {
+      get
+      {
+        if (_cachedOrigin != null) return _cachedOrigin;
+        var r = this;
+        while (r.ClonedFrom != null) { r = r.ClonedFrom; }
+        return _cachedOrigin = r;
+      }
+    }
+
+    // <xinhaoyuan@gmail.com> and override equal comparison to follow ClonedFrom
+    public static bool operator==(Declaration me, Declaration other)
+    {
+      if ((object)me == null)
+        return (object)other == null;
+      else if ((object)other == null)
+        return false;
+      return me.Origin.Equals(other.Origin);
+    }
+
+    public static bool operator!=(Declaration me, Declaration other)
+    {
+      return !(me == other);
     }
 
     [Pure]
@@ -2578,8 +2606,8 @@ namespace Microsoft.Dafny {
 
   public class OpaqueType_AsParameter : TypeParameter {
     public readonly List<TypeParameter> TypeArgs;
-    public OpaqueType_AsParameter(IToken tok, string name, EqualitySupportValue equalitySupport, List<TypeParameter> typeArgs)
-      : base(tok, name, equalitySupport) {
+    public OpaqueType_AsParameter(IToken tok, string name, EqualitySupportValue equalitySupport, List<TypeParameter> typeArgs, Declaration cloneFrom = null)
+      : base(tok, name, equalitySupport, cloneFrom) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(typeArgs != null);
@@ -4052,7 +4080,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(name != null);
       Contract.Requires(module != null);
       Contract.Requires(typeArgs != null);
-      TheType = new OpaqueType_AsParameter(tok, name, equalitySupport, TypeArgs);
+      TheType = new OpaqueType_AsParameter(tok, name, equalitySupport, TypeArgs, clonedFrom);
       this.NewSelfSynonym();
     }
 
