@@ -78,7 +78,7 @@ class DoublyLinkedList {
   constructor (nodes: seq<Node>)
     requires forall i :: 0 <= i < |nodes| ==> nodes[i] != null
     requires forall i,j :: 0 <= i < j < |nodes| ==> nodes[i] != nodes[j]
-    modifies this, nodes
+    modifies nodes
     ensures Valid() && Nodes == nodes
   {
     if nodes != [] {
@@ -146,6 +146,7 @@ class DoublyLinkedList {
     x.R.L := x;
     x.L.R := x;
     Nodes := Nodes[..k] + [x] + Nodes[k..];
+    assert forall i,j :: 0 <= i < j < |Nodes| ==> Nodes[i] != Nodes[j];
   }
 }
 

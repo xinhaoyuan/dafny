@@ -402,7 +402,6 @@ namespace Microsoft.Dafny
   /// be added.
   ///
   /// For every constructor, add:
-  ///    modifies this;
   ///    ensures Valid() && fresh(Repr - {this})
   /// At the end of the body of the constructor, add:
   ///    Repr := {this};
@@ -504,9 +503,6 @@ namespace Microsoft.Dafny
           AddHoverText(member.tok, format, valid, repr);
         } else if (member is Constructor) {
           var ctor = (Constructor)member;
-          // modifies this;
-          var m0 = new ThisExpr(tok);
-          ctor.Mod.Expressions.Add(new FrameExpression(tok, m0, null));
           // ensures Valid();
           var valid = new FunctionCallExpr(tok, "Valid", new ImplicitThisExpr(tok), tok, new List<Expression>());
           ctor.Ens.Insert(0, new MaybeFreeExpression(valid));
@@ -515,6 +511,7 @@ namespace Microsoft.Dafny
             new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr"),
             new SetDisplayExpr(tok, true, new List<Expression>() { new ThisExpr(tok) })));
           ctor.Ens.Insert(1, new MaybeFreeExpression(freshness));
+          var m0 = new ThisExpr(tok);
           AddHoverText(member.tok, "modifies {0}\nensures {1} && {2}", m0, valid, freshness);
         }
       }
@@ -652,17 +649,17 @@ namespace Microsoft.Dafny
         } else if (member is Constructor) {
           var ctor = (Constructor)member;
           if (ctor.Body != null) {
-            var bodyStatements = ((BlockStmt)ctor.Body).Body;
-            var n = bodyStatements.Count;
+            var sbs = (DividedBlockStmt)ctor.Body;
+            var n = sbs.Body.Count;
             if (ctor.RefinementBase == null) {
               // Repr := {this};
               var e = new SetDisplayExpr(tok, true, new List<Expression>() { self });
               e.Type = new SetType(true, new ObjectType());
               Statement s = new AssignStmt(tok, tok, Repr, new ExprRhs(e));
               s.IsGhost = true;
-              bodyStatements.Add(s);
+              sbs.AppendStmt(s);
             }
-            AddSubobjectReprs(tok, ctor.BodyEndTok, subobjects, bodyStatements, n, implicitSelf, cNull, Repr);
+            AddSubobjectReprs(tok, ctor.BodyEndTok, subobjects, sbs, n, implicitSelf, cNull, Repr);
           }
 
         } else if (member is Method && !member.IsStatic && Valid != null) {
@@ -709,20 +706,19 @@ namespace Microsoft.Dafny
 
           if (addStatementsToUpdateRepr && m.Body != null) {
             var methodBody = (BlockStmt)m.Body;
-            var bodyStatements = methodBody.Body;
-            AddSubobjectReprs(tok, methodBody.EndTok, subobjects, bodyStatements, bodyStatements.Count, implicitSelf, cNull, Repr);
+            AddSubobjectReprs(tok, methodBody.EndTok, subobjects, methodBody, methodBody.Body.Count, implicitSelf, cNull, Repr);
           }
         }
       }
     }
 
-    void AddSubobjectReprs(IToken tok, IToken endCurlyTok, List<Tuple<Field, Field, Function>> subobjects, List<Statement> bodyStatements, int hoverTextFromHere,
+    void AddSubobjectReprs(IToken tok, IToken endCurlyTok, List<Tuple<Field, Field, Function>> subobjects, BlockStmt block, int hoverTextFromHere,
       Expression implicitSelf, Expression cNull, Expression Repr) {
       Contract.Requires(tok != null);
       Contract.Requires(endCurlyTok != null);
       Contract.Requires(subobjects != null);
-      Contract.Requires(bodyStatements != null);
-      Contract.Requires(0 <= hoverTextFromHere && hoverTextFromHere <= bodyStatements.Count);
+      Contract.Requires(block != null);
+      Contract.Requires(0 <= hoverTextFromHere && hoverTextFromHere <= block.Body.Count);
       Contract.Requires(implicitSelf != null);
       Contract.Requires(cNull != null);
       Contract.Requires(Repr != null);
@@ -761,14 +757,14 @@ namespace Microsoft.Dafny
         thn.IsGhost = true;
         s = new IfStmt(tok, tok, false, e, thn, null);
         s.IsGhost = true;
-        // finally, add s to the body
-        bodyStatements.Add(s);
+        // finally, add s to the block
+        block.AppendStmt(s);
       }
-      if (hoverTextFromHere != bodyStatements.Count) {
+      if (hoverTextFromHere != block.Body.Count) {
         var hoverText = "";
         var sep = "";
-        for (int i = hoverTextFromHere; i < bodyStatements.Count; i++) {
-          hoverText += sep + Printer.StatementToString(bodyStatements[i]);
+        for (int i = hoverTextFromHere; i < block.Body.Count; i++) {
+          hoverText += sep + Printer.StatementToString(block.Body[i]);
           sep = "\n";
         }
         AddHoverText(endCurlyTok, "{0}", hoverText);

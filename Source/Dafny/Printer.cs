@@ -218,7 +218,7 @@ Everything) {
           var at = (OpaqueTypeDecl)d;
           if (i++ != 0) { wr.WriteLine(); }
           Indent(indent);
-          PrintClassMethodHelper("type", at.Attributes, at.Name + EqualitySupportSuffix(at.EqualitySupport), d.TypeArgs);
+          PrintClassMethodHelper("type", at.Attributes, at.Name + TPCharacteristicsSuffix(at.TheType.Characteristics), d.TypeArgs);
           wr.WriteLine();
         } else if (d is NewtypeDecl) {
           var dd = (NewtypeDecl)d;
@@ -228,43 +228,42 @@ Everything) {
           wr.Write(" = ");
           if (dd.Var == null) {
             PrintType(dd.BaseType);
+            wr.WriteLine();
           } else {
             wr.Write(dd.Var.DisplayName);
-            if (!(dd.Var.Type is TypeProxy) || DafnyOptions.O.DafnyPrintResolvedFile != null) {
+            if (ShowType(dd.Var.Type)) {
               wr.Write(": ");
               PrintType(dd.BaseType);
             }
-            wr.Write(" | ");
+            wr.WriteLine();
+            Indent(indent + IndentAmount);
+            wr.Write("| ");
             PrintExpression(dd.Constraint, true);
-            if (dd.Witness != null) {
-              wr.Write(" witness ");
-              PrintExpression(dd.Witness, true);
-            }
+            wr.WriteLine();
+            PrintWitnessClause(dd, indent + IndentAmount);
           }
-          wr.WriteLine();
         } else if (d is SubsetTypeDecl) {
           var dd = (SubsetTypeDecl)d;
           if (i++ != 0) { wr.WriteLine(); }
           Indent(indent);
-          PrintClassMethodHelper("type", dd.Attributes, dd.Name + EqualitySupportSuffix(dd.EqualitySupport), dd.TypeArgs);
+          PrintClassMethodHelper("type", dd.Attributes, dd.Name + TPCharacteristicsSuffix(dd.Characteristics), dd.TypeArgs);
           wr.Write(" = ");
           wr.Write(dd.Var.DisplayName);
-          if (!(dd.Var.Type is TypeProxy) || DafnyOptions.O.DafnyPrintResolvedFile != null) {
+          if (ShowType(dd.Var.Type)) {
             wr.Write(": ");
             PrintType(dd.Rhs);
           }
-          wr.Write(" | ");
-          PrintExpression(dd.Constraint, true);
-          if (dd.Witness != null) {
-            wr.Write(" witness ");
-            PrintExpression(dd.Witness, true);
-          }
           wr.WriteLine();
+          Indent(indent + IndentAmount);
+          wr.Write("| ");
+          PrintExpression(dd.Constraint, true);
+          wr.WriteLine();
+          PrintWitnessClause(dd, indent + IndentAmount);
         } else if (d is TypeSynonymDecl) {
           var dd = (TypeSynonymDecl)d;
           if (i++ != 0) { wr.WriteLine(); }
           Indent(indent);
-          PrintClassMethodHelper("type", dd.Attributes, dd.Name + EqualitySupportSuffix(dd.EqualitySupport), dd.TypeArgs);
+          PrintClassMethodHelper("type", dd.Attributes, dd.Name + TPCharacteristicsSuffix(dd.Characteristics), dd.TypeArgs);
           wr.Write(" = ");
           PrintType(dd.Rhs);
           wr.WriteLine();
@@ -356,6 +355,33 @@ Everything) {
         } else {
           Contract.Assert(false);  // unexpected TopLevelDecl
         }
+      }
+    }
+
+    private void PrintWitnessClause(RedirectingTypeDecl dd, int indent) {
+      Contract.Requires(dd != null);
+      Contract.Requires(0 <= indent);
+      if (dd.WitnessKind == SubsetTypeDecl.WKind.None) {
+        return;
+      }
+      Indent(indent);
+      switch (dd.WitnessKind) {
+        case SubsetTypeDecl.WKind.Ghost:
+          wr.Write("ghost ");
+          goto case SubsetTypeDecl.WKind.Compiled;
+        case SubsetTypeDecl.WKind.Compiled:
+          wr.Write("witness ");
+          PrintExpression(dd.Witness, true);
+          wr.WriteLine();
+          break;
+        case SubsetTypeDecl.WKind.None:
+          break;
+        case SubsetTypeDecl.WKind.Special:
+          wr.WriteLine("/*special witness*/");
+          break;
+        default:
+          Contract.Assert(false);  // unexpected WKind
+          break;
       }
     }
 
@@ -571,7 +597,7 @@ Everything) {
       if (typeArgs.Count != 0 && !typeArgs[0].Name.StartsWith("_")) {
         wr.Write("<" +
                  Util.Comma(", ", typeArgs,
-                   tp => tp.Name + EqualitySupportSuffix(tp.EqualitySupport))
+                   tp => tp.Name + TPCharacteristicsSuffix(tp.Characteristics))
                  + ">");
       }
     }
@@ -633,14 +659,30 @@ Everything) {
     public void PrintField(Field field, int indent) {
       Contract.Requires(field != null);
       Indent(indent);
+      if (field.HasStaticKeyword) {
+        wr.Write("static ");
+      }
       if (field.IsGhost) {
         wr.Write("ghost ");
       }
-      wr.Write("var");
+      if (field is ConstantField) {
+        wr.Write("const");
+      } else {
+        wr.Write("var");
+      }
       PrintAttributes(field.Attributes);
-      wr.Write(" {0}: ", field.Name);
-      PrintType(field.Type);
-      if (field.IsUserMutable) {
+      wr.Write(" {0}", field.Name);
+      if (ShowType(field.Type)) {
+        wr.Write(": ");
+        PrintType(field.Type);
+      }
+      if (field is ConstantField) {
+        var c = (ConstantField)field;
+        if (c.Rhs != null) {
+          wr.Write(" := ");
+          PrintExpression(c.Rhs, true);
+        }
+      } else if (field.IsUserMutable) {
         // nothing more to say
       } else if (field.IsMutable) {
         wr.Write("  // non-assignable");
@@ -902,13 +944,26 @@ Everything) {
       }
     }
 
-    string EqualitySupportSuffix(TypeParameter.EqualitySupportValue es) {
-      if (es == TypeParameter.EqualitySupportValue.Required ||
-        (es == TypeParameter.EqualitySupportValue.InferredRequired && DafnyOptions.O.DafnyPrintResolvedFile != null)) {
-        return "(==)";
-      } else {
-        return "";
+    string TPCharacteristicsSuffix(TypeParameter.TypeParameterCharacteristics characteristics) {
+      string s = null;
+      if (characteristics.EqualitySupport == TypeParameter.EqualitySupportValue.Required ||
+        (characteristics.EqualitySupport == TypeParameter.EqualitySupportValue.InferredRequired && DafnyOptions.O.DafnyPrintResolvedFile != null)) {
+        s = "==";
       }
+      if (characteristics.MustSupportZeroInitialization) {
+        var prefix = s == null ? "" : s + ",";
+        s = prefix + "0";
+      }
+      if (s == null) {
+        return "";
+      } else {
+        return "(" + s + ")";
+      }
+    }
+
+    bool ShowType(Type t) {
+      Contract.Requires(t != null);
+      return !(t is TypeProxy) || DafnyOptions.O.DafnyPrintResolvedFile != null;
     }
 
     // ----------------------------- PrintStatement -----------------------------
@@ -990,6 +1045,27 @@ Everything) {
         wr.Write(" := ");
         PrintRhs(s.Rhs);
         wr.Write(";");
+
+      } else if (stmt is DividedBlockStmt) {
+        var sbs = (DividedBlockStmt)stmt;
+        wr.WriteLine("{");
+        int ind = indent + IndentAmount;
+        foreach (Statement s in sbs.BodyInit) {
+          Indent(ind);
+          PrintStatement(s, ind);
+          wr.WriteLine();
+        }
+        if (sbs.BodyProper.Count != 0 || sbs.SeparatorTok != null) {
+          Indent(indent + IndentAmount);
+          wr.WriteLine("new;");
+          foreach (Statement s in sbs.BodyProper) {
+            Indent(ind);
+            PrintStatement(s, ind);
+            wr.WriteLine();
+          }
+        }
+        Indent(indent);
+        wr.Write("}");
 
       } else if (stmt is BlockStmt) {
         wr.WriteLine("{");
@@ -1080,7 +1156,10 @@ Everything) {
         CalcStmt s = (CalcStmt)stmt;
         if (printMode == DafnyOptions.PrintModes.NoGhost) { return; }   // Calcs don't get a "ghost" attribute, but they are.
         wr.Write("calc ");
-        if (!s.Op.Equals(CalcStmt.DefaultOp)) {
+        if (s.UserSuppliedOp != null) {
+          PrintCalcOp(s.UserSuppliedOp);
+          wr.Write(" ");
+        } else if (DafnyOptions.O.DafnyPrintResolvedFile != null && s.Op != null) {
           PrintCalcOp(s.Op);
           wr.Write(" ");
         }
@@ -1103,9 +1182,9 @@ Everything) {
             break;
           }
           // print the operator, if any
-          if (!s.Op.Equals(op)) {
+          if (op != null || (DafnyOptions.O.DafnyPrintResolvedFile != null && s.Op != null)) {
             Indent(indent);  // this lines up with the "calc"
-            PrintCalcOp(op);
+            PrintCalcOp(op ?? s.Op);
             wr.WriteLine();
           }
           // print the hints
@@ -1183,15 +1262,10 @@ Everything) {
 
       } else if (stmt is LetStmt) {
         var s = (LetStmt)stmt;
-        wr.Write("var");
-        string sep = "";
-        foreach (var lhs in s.LHSs) {
-          wr.Write(sep);
-          PrintCasePattern(lhs);
-          sep = ", ";
-        }
+        wr.Write("var ");
+        PrintCasePattern(s.LHS);
         wr.Write(" := ");
-        PrintExpressionList(s.RHSs, true);
+        PrintExpression(s.RHS, true);
         wr.WriteLine(";");
 
       } else if (stmt is SkeletonStatement) {
@@ -1344,15 +1418,35 @@ Everything) {
         TypeRhs t = (TypeRhs)rhs;
         wr.Write("new ");
         if (t.ArrayDimensions != null) {
-          PrintType(t.EType);
-          string s = "[";
-          foreach (Expression dim in t.ArrayDimensions) {
-            Contract.Assume(dim != null);
-            wr.Write(s);
-            PrintExpression(dim, false);
-            s = ", ";
+          if (ShowType(t.EType)) {
+            PrintType(t.EType);
           }
-          wr.Write("]");
+          var dim0 = t.ArrayDimensions[0] as LiteralExpr;
+          if (DafnyOptions.O.DafnyPrintResolvedFile == null &&
+            t.InitDisplay != null &&
+            t.ArrayDimensions.Count == 1 && dim0.Value is BigInteger &&
+            (BigInteger)dim0.Value == new BigInteger(t.InitDisplay.Count)) {
+            // elide the size
+            wr.Write("[]");
+          } else {
+            string s = "[";
+            foreach (Expression dim in t.ArrayDimensions) {
+              Contract.Assume(dim != null);
+              wr.Write(s);
+              PrintExpression(dim, false);
+              s = ", ";
+            }
+            wr.Write("]");
+          }
+          if (t.ElementInit != null) {
+            wr.Write(" (");
+            PrintExpression(t.ElementInit, false);
+            wr.Write(")");
+          } else if (t.InitDisplay != null) {
+            wr.Write(" [");
+            PrintExpressionList(t.InitDisplay, false);
+            wr.Write("]");
+          }
         } else if (t.Arguments == null) {
           PrintType(t.EType);
         } else {
@@ -2112,9 +2206,9 @@ Everything) {
         var e = (LambdaExpr)expr;
         bool parensNeeded = !isRightmost;
         if (parensNeeded) { wr.Write("("); }
-        var skipSignatureParens = e.BoundVars.Count == 1 && e.BoundVars[0].Type is InferredTypeProxy;
+        var skipSignatureParens = e.BoundVars.Count == 1 && !ShowType(e.BoundVars[0].Type);
         if (!skipSignatureParens) { wr.Write("("); }
-        wr.Write(Util.Comma(", ", e.BoundVars, bv => bv.DisplayName + (bv.Type is InferredTypeProxy ? "" : ": " + bv.Type)));
+        wr.Write(Util.Comma(", ", e.BoundVars, bv => bv.DisplayName + (ShowType(bv.Type) ? ": " + bv.Type : "")));
         if (!skipSignatureParens) { wr.Write(")"); }
         if (e.Range != null) {
           wr.Write(" requires ");

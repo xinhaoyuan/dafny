@@ -13,18 +13,17 @@ class List<T> {
   {
     this in Repr && null !in Repr &&
     a in Repr &&
-    n <= a.Length != 0 &&
+    n <= a.Length &&
     Contents == a[..n]
   }
 
   constructor Init()
-    modifies this;
     ensures Valid() && fresh(Repr - {this});
     ensures Contents == [];
   {
-    Contents, Repr, n := [], {this}, 0;
-    a := new T[25];
-    Repr := Repr + {a};
+    Contents, n := [], 0;
+    a := new T[0];
+    Repr := {this, a};
   }
 
   method Add(t: T)
@@ -34,10 +33,8 @@ class List<T> {
     ensures Contents == old(Contents) + [t];
   {
     if (n == a.Length) {
-      var b := new T[2 * a.Length];
-      forall i | 0 <= i < a.Length {
-        b[i] := a[i];
-      }
+      var b := new T[2 * a.Length + 1](i requires 0 <= i && a != null reads this, a =>
+                                       if i < a.Length then a[i] else t);
       assert b[..n] == a[..n] == Contents;
       a, Repr := b, Repr + {b};
       assert b[..n] == Contents;
@@ -72,7 +69,7 @@ iterator M<T>(l: List<T>, c: Cell) yields (x: T)
   }
 }
 
-method Client<T(==)>(l: List, stop: T) returns (s: seq<T>)
+method Client<T(==,0)>(l: List, stop: T) returns (s: seq<T>)
   requires l != null && l.Valid();
 {
   var c := new Cell;
