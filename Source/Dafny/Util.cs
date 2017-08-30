@@ -24,7 +24,18 @@ namespace Microsoft.Dafny {
       return res;
     }
 
-    public static List<B> Map<A,B>(IEnumerable<A> xs, Func<A,B> f)
+    public static string Comma(int count, Func<int, string> f) {
+      Contract.Requires(0 <= count);
+      string res = "";
+      string c = "";
+      for (int i = 0; i < count; i++) {
+        res += c + f(i);
+        c = ",";
+      }
+      return res;
+    }
+
+    public static List<B> Map<A, B>(IEnumerable<A> xs, Func<A, B> f)
     {
       List<B> ys = new List<B>();
       foreach (A x in xs) {
@@ -167,6 +178,37 @@ namespace Microsoft.Dafny {
       } else {
         return ch - '0';
       }
+    }
+
+    /// <summary>
+    /// Add "fe" to "mod", if "performThisDeprecationCheck" is "false".
+    /// Otherwise, first strip "fe" of certain easy occurrences of "this", and for each one giving a warning about
+    /// that "this" is deprecated in modifies clauses of constructors.
+    /// This method may modify "fe" and the subexpressions contained within "fe".
+    /// </summary>
+    public static void AddFrameExpression(List<FrameExpression> mod, FrameExpression fe, bool performThisDeprecationCheck, Errors errors) {
+      Contract.Requires(mod != null);
+      Contract.Requires(fe != null);
+      Contract.Requires(errors != null);
+      if (performThisDeprecationCheck) {
+        if (fe.E is ThisExpr) {
+          errors.Deprecated(fe.E.tok, "Dafny's constructors no longer need 'this' to be listed in modifies clauses");
+          return;
+        } else if (fe.E is SetDisplayExpr) {
+          var s = (SetDisplayExpr)fe.E;
+          var deprecated = s.Elements.FindAll(e => e is ThisExpr);
+          if (deprecated.Count != 0) {
+            foreach (var e in deprecated) {
+              errors.Deprecated(e.tok, "Dafny's constructors no longer need 'this' to be listed in modifies clauses");
+            }
+            s.Elements.RemoveAll(e => e is ThisExpr);
+            if (s.Elements.Count == 0) {
+              return;
+            }
+          }
+        }
+      }
+      mod.Add(fe);
     }
 
     /// <summary>

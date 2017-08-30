@@ -1,428 +1,438 @@
 // RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint" "%s" > "%t"
 // RUN: %diff "%s.expect" "%t"
+
 module Misc {
-//Should not verify, as ghost loops should not be allowed to diverge.
-method GhostDivergentLoop()
-{
-   var a := new int [2];
-   a[0] := 1;
-   a[1] := -1;
-   ghost var i := 0;
-   while (i < 2)
-      decreases * // error: not allowed on a ghost loop
-      invariant i <= 2
-      invariant (forall j :: 0 <= j && j < i ==> a[j] > 0)
-   {
-     i := 0;
-   }
-   assert a[1] != a[1]; // ...for then this would incorrectly verify
-}
-
-method ManyIndices<T>(a: array3<T>, b: array<T>, m: int, n: int)
-{
-  // the following invalid expressions were once incorrectly resolved:
-  var x := a[m, n];        // error
-  var y := a[m];           // error
-  var z := b[m, n, m, n];  // error
-}
-
-method SB(b: array2<int>, s: int) returns (x: int, y: int)
-  requires b != null;
-{
-  while
+  //Should not verify, as ghost loops should not be allowed to diverge.
+  method GhostDivergentLoop()
   {
-    case b[x,y] == s =>
+     var a := new int [2];
+     a[0] := 1;
+     a[1] := -1;
+     ghost var i := 0;
+     while (i < 2)
+        decreases * // error: not allowed on a ghost loop
+        invariant i <= 2
+        invariant (forall j :: 0 <= j && j < i ==> a[j] > 0)
+     {
+       i := 0;
+     }
+     assert a[1] != a[1]; // ...for then this would incorrectly verify
   }
-}
 
-// -------- name resolution
-
-class Global {
-  var X: int;
-  function method F(x: int): int { x }
-  static function method G(x: int): int { x }
-  method M(x: int) returns (r: int)
+  method ManyIndices<T>(a: array3<T>, b: array<T>, m: int, n: int)
   {
-    r := x + X;
+    // the following invalid expressions were once incorrectly resolved:
+    var x := a[m, n];        // error
+    var y := a[m];           // error
+    var z := b[m, n, m, n];  // error
   }
-  static method N(x: int) returns (r: int)
+
+  method SB(b: array2<int>, s: int) returns (x: int, y: int)
+    requires b != null;
   {
-    r := x + X;  // error: cannot access instance field X from static method
+    while
+    {
+      case b[x,y] == s =>
+    }
+  }
+
+  // -------- name resolution
+
+  class Global {
+    var X: int;
+    function method F(x: int): int { x }
+    static function method G(x: int): int { x }
+    method M(x: int) returns (r: int)
+    {
+      r := x + X;
+    }
+    static method N(x: int) returns (r: int)
+    {
+      r := x + X;  // error: cannot access instance field X from static method
+    }
+  }
+
+  method TestNameResolution0() {
+    var z: int;
+    z := Global.X;  // error: X is an instance field
+    z := F(2);  // error: cannot resolve F
+    z := Global.F(2);  // error: invocation of instance function requires an instance
+    z := G(2);  // error: cannot resolve G
+    z := Global.G(2);
+    z := M(2);  // error: cannot resolve M
+    z := Global.M(2);  // error: call to instance method requires an instance
+    z := N(1);  // error: cannot resolve N
+    z := Global.N(1);
+
+    z := z(5);  // error: using local as if it were a function
+    z := Global.z;  // error: class Global does not have a member z
+
+    var Global: Global;  // a local variable with the name 'Global'
+    z := Global.X;  // this means the instance field X of the object stored in the local variable 'Global'
+    var gg: Global := null;
+    var y := gg.G(5);
+    y := gg.N(5);
+  }
+
+  datatype Abc = Abel | Benny | Cecilia(y: int) | David(x: int) | Eleanor
+  datatype Xyz = Alberta | Benny | Constantine(y: int) | David(x: int)
+  datatype Rst = David(x: int, y: int)
+
+  function Tuv(arg0: Abc, arg1: bool): int { 10 }
+
+  class EE {
+    var Eleanor: bool;
+    method TestNameResolution1() {
+      var a0 := Abel;
+      var a1 := Alberta;
+      var b0 := Benny;  // error: there's more than one constructor with the name Benny; needs qualification
+      var b1 := Abc.Benny;
+      var b2 := Xyz.Benny;
+      var Benny := 15;  // introduce a local variable with the name 'Benny'
+      var b3 := Benny;
+      var d0 := David(20);  // error: constructor name David is ambiguous
+      var d1 := David;  // error: constructor name David is ambiguous (never mind that the signature does
+            // not match either of them)
+      var d2 := David(20, 40);  // error: constructor name Davis is ambiguous (never mind that the given
+              // parameters match the signature of only one of those constructors)
+      var d3 := Abc.David(20, 40);  // error: wrong number of parameters
+      var d4 := Rst.David(20, 40);
+      var e := Eleanor;  // this resolves to the field, not the Abc datatype constructor
+      assert Tuv(Abc.Eleanor, e) == 10;
+    }
   }
 }
 
-method TestNameResolution0() {
-  var z: int;
-  z := Global.X;  // error: X is an instance field
-  z := F(2);  // error: cannot resolve F
-  z := Global.F(2);  // error: invocation of instance function requires an instance
-  z := G(2);  // error: cannot resolve G
-  z := Global.G(2);
-  z := M(2);  // error: cannot resolve M
-  z := Global.M(2);  // error: call to instance method requires an instance
-  z := N(1);  // error: cannot resolve N
-  z := Global.N(1);
-
-  z := z(5);  // error: using local as if it were a function
-  z := Global.z;  // error: class Global does not have a member z
-
-  var Global: Global;  // a local variable with the name 'Global'
-  z := Global.X;  // this means the instance field X of the object stored in the local variable 'Global'
-  var gg: Global := null;
-  var y := gg.G(5);
-  y := gg.N(5);
-}
-
-datatype Abc = Abel | Benny | Cecilia(y: int) | David(x: int) | Eleanor
-datatype Xyz = Alberta | Benny | Constantine(y: int) | David(x: int)
-datatype Rst = David(x: int, y: int)
-
-function Tuv(arg0: Abc, arg1: bool): int { 10 }
-
-class EE {
-  var Eleanor: bool;
-  method TestNameResolution1() {
-    var a0 := Abel;
-    var a1 := Alberta;
-    var b0 := Benny;  // error: there's more than one constructor with the name Benny; needs qualification
-    var b1 := Abc.Benny;
-    var b2 := Xyz.Benny;
-    var Benny := 15;  // introduce a local variable with the name 'Benny'
-    var b3 := Benny;
-    var d0 := David(20);  // error: constructor name David is ambiguous
-    var d1 := David;  // error: constructor name David is ambiguous (never mind that the signature does
-          // not match either of them)
-    var d2 := David(20, 40);  // error: constructor name Davis is ambiguous (never mind that the given
-            // parameters match the signature of only one of those constructors)
-    var d3 := Abc.David(20, 40);  // error: wrong number of parameters
-    var d4 := Rst.David(20, 40);
-    var e := Eleanor;  // this resolves to the field, not the Abc datatype constructor
-    assert Tuv(Abc.Eleanor, e) == 10;
-  }
-}
-}
 // --------------- ghost tests -------------------------------------
+
 module HereAreMoreGhostTests {
-datatype GhostDt =
-  Nil(ghost extraInfo: int) |
-  Cons(data: int, tail: GhostDt, ghost moreInfo: int)
+  datatype GhostDt =
+    Nil(ghost extraInfo: int) |
+    Cons(data: int, tail: GhostDt, ghost moreInfo: int)
 
-class GhostTests {
-  method M(dt: GhostDt) returns (r: int) {
-    ghost var g := 5;
-    r := g;  // error: RHS is ghost, LHS is not
-    r := F(18, g);  // error: RHS is a ghost and will not be available at run time
-    r := G(20, g);  // it's fine to pass a ghost as a parameter to a non-ghost, because
-                    // only the ghost goes away during compilation
-    r := N(22, g);  // ditto
-    r := N(g, 22);  // error: passing in 'g' as non-ghost parameter
-    r := P(24, 22);  // error: 'P' is ghost, but its result is assigned to a non-ghost
+  class GhostTests {
+    method M(dt: GhostDt) returns (r: int) {
+      ghost var g := 5;
+      r := g;  // error: RHS is ghost, LHS is not
+      r := F(18, g);  // error: RHS is a ghost and will not be available at run time
+      r := G(20, g);  // it's fine to pass a ghost as a parameter to a non-ghost, because
+                      // only the ghost goes away during compilation
+      r := N(22, g);  // ditto
+      r := N(g, 22);  // error: passing in 'g' as non-ghost parameter
+      r := P(24, 22);  // error: 'P' is ghost, but its result is assigned to a non-ghost
 
-    match (dt) {
-      case Nil(gg) =>
-      case Cons(dd, tt, gg) =>
-        r := G(dd, dd);  // fine
-        r := G(dd, gg);  // fine
-        r := G(gg, gg);  // error: cannot pass ghost 'gg' as non-ghost parameter to 'G'
+      match (dt) {
+        case Nil(gg) =>
+        case Cons(dd, tt, gg) =>
+          r := G(dd, dd);  // fine
+          r := G(dd, gg);  // fine
+          r := G(gg, gg);  // error: cannot pass ghost 'gg' as non-ghost parameter to 'G'
+      }
+      var dd;
+      dd := GhostDt.Nil(g);  // fine
+      dd := GhostDt.Cons(g, dt, 2);  // error: cannot pass 'g' as non-ghost parameter
+      ghost var dtg := GhostDt.Cons(g, dt, 2);  // fine, since result is ghost
     }
-    var dd;
-    dd := GhostDt.Nil(g);  // fine
-    dd := GhostDt.Cons(g, dt, 2);  // error: cannot pass 'g' as non-ghost parameter
-    ghost var dtg := GhostDt.Cons(g, dt, 2);  // fine, since result is ghost
-  }
-  function F(x: int, y: int): int {
-    y
-  }
-  function method G(x: int, ghost y: int): int {
-    y  // error: cannot return a ghost from a non-ghost function
-  }
-  function method H(dt: GhostDt): int {
-    match dt
-    case Nil(gg) =>  gg  // error: cannot return a ghost from a non-ghost function
-    case Cons(dd, tt, gg) =>  dd + gg  // error: ditto
-  }
-  method N(x: int, ghost y: int) returns (r: int) {
-    r := x;
-  }
-  ghost method P(x: int, y: int) returns (r: int) {
-    ghost var g := 5;
-    r := y;  // allowed, since the entire method is ghost
-    r := r + g;  // fine, for the same reason
-    r := N(20, 20);  // error: call to non-ghost method from ghost method is not okay
-  }
-  ghost method BreaksAreFineHere(t: int)
-  {
-    var n := 0;
-    ghost var k := 0;
-    while (true)
-      invariant n <= 112;
-      decreases 112 - n;
-    {
-      label MyStructure: {
-        if (k % 17 == 0) { break MyStructure; }  // this is fine, because it's a ghost method
-        k := k + 1;
-      }
-      label MyOtherStructure:
-      if (k % 17 == 0) {
-        break MyOtherStructure;
-      } else {
-        k := k + 1;
-      }
-
-      if (n == 112) {
-        break;
-      } else if (n == t) {
-        return;
-      }
-      n := n + 1;
+    function F(x: int, y: int): int {
+      y
     }
-  }
-  method BreakMayNotBeFineHere(ghost t: int)
-  {
-    var n := 0;
-    ghost var k := 0;
-    var p := 0;
-    while (true)
-      invariant n <= 112;
-      decreases 112 - n;
+    function method G(x: int, ghost y: int): int {
+      y  // error: cannot return a ghost from a non-ghost function
+    }
+    function method H(dt: GhostDt): int {
+      match dt
+      case Nil(gg) =>  gg  // error: cannot return a ghost from a non-ghost function
+      case Cons(dd, tt, gg) =>  dd + gg  // error: ditto
+    }
+    method N(x: int, ghost y: int) returns (r: int) {
+      r := x;
+    }
+    ghost method P(x: int, y: int) returns (r: int) {
+      ghost var g := 5;
+      r := y;  // allowed, since the entire method is ghost
+      r := r + g;  // fine, for the same reason
+      r := N(20, 20);  // error: call to non-ghost method from ghost method is not okay
+    }
+    ghost method BreaksAreFineHere(t: int)
     {
-      label MyStructure: {
-        k := k + 1;
-      }
-      label MyOtherStructure:
-      if (k % 17 == 0) {
-        break MyOtherStructure;  // this break is fine
-      } else {
-        k := k + 1;
-      }
+      var n := 0;
+      ghost var k := 0;
+      while (true)
+        invariant n <= 112;
+        decreases 112 - n;
+      {
+        label MyStructure: {
+          if (k % 17 == 0) { break MyStructure; }  // this is fine, because it's a ghost method
+          k := k + 1;
+        }
+        label MyOtherStructure:
+        if (k % 17 == 0) {
+          break MyOtherStructure;
+        } else {
+          k := k + 1;
+        }
 
-      var dontKnow;
-      if (n == 112) {
-        ghost var m := 0;
-        label LoopLabel0:
-        label LoopLabel1:
-        while (m < 200) {
-          if (m % 103 == 0) {
-            if {
-              case true => break;  // fine, since this breaks out of the enclosing ghost loop
-              case true => break LoopLabel0;  // fine
-              case true => break LoopLabel1;  // fine
+        if (n == 112) {
+          break;
+        } else if (n == t) {
+          return;
+        }
+        n := n + 1;
+      }
+    }
+    method BreakMayNotBeFineHere(ghost t: int)
+    {
+      var n := 0;
+      ghost var k := 0;
+      var p := 0;
+      while (true)
+        invariant n <= 112;
+        decreases 112 - n;
+      {
+        label MyStructure: {
+          k := k + 1;
+        }
+        label MyOtherStructure:
+        if (k % 17 == 0) {
+          break MyOtherStructure;  // this break is fine
+        } else {
+          k := k + 1;
+        }
+
+        var dontKnow;
+        if (n == 112) {
+          ghost var m := 0;
+          label LoopLabel0:
+          label LoopLabel1:
+          while (m < 200) {
+            if (m % 103 == 0) {
+              if {
+                case true => break;  // fine, since this breaks out of the enclosing ghost loop
+                case true => break LoopLabel0;  // fine
+                case true => break LoopLabel1;  // fine
+              }
+            } else if (m % 101 == 0) {
             }
-          } else if (m % 101 == 0) {
+            m := m + 3;
           }
-          m := m + 3;
-        }
-        break;
-      } else if (dontKnow == 708) {
-        var q := 0;
-        while (q < 1) {
-          label IfNest:
-          if (p == 67) {
-            break break;  // fine, since this is not a ghost context
-          }
-          q := q + 1;
-        }
-      } else if (n == t) {
-      }
-      n := n + 1;
-      p := p + 1;
-    }
-  }
-  method BreakMayNotBeFineHere_Ghost(ghost t: int)
-  {
-    var n := 0;
-    ghost var k := 0;
-    var p := 0;
-    while (true)
-      invariant n <= 112;
-      decreases 112 - n;
-    {
-      label MyStructure: {
-        if (k % 17 == 0) { break MyStructure; }  // error: break from ghost to non-ghost point
-        k := k + 1;
-      }
-      label MyOtherStructure:
-      if (k % 17 == 0) {
-        break MyOtherStructure;  // this break is fine
-      } else {
-        k := k + 1;
-      }
-
-      var dontKnow;
-      if (n == 112) {
-        ghost var m := 0;
-        label LoopLabel0:
-        label LoopLabel1:
-        while (m < 200) {
-          if (m % 103 == 0) {
-            if {
-              case true => break;  // fine, since this breaks out of the enclosing ghost loop
-              case true => break LoopLabel0;  // fine
-              case true => break LoopLabel1;  // fine
+          break;
+        } else if (dontKnow == 708) {
+          var q := 0;
+          while (q < 1) {
+            label IfNest:
+            if (p == 67) {
+              break break;  // fine, since this is not a ghost context
             }
-          } else if (m % 101 == 0) {
-            break break;  // error: break out of non-ghost loop from ghost context
+            q := q + 1;
           }
-          m := m + 3;
+        } else if (n == t) {
         }
-        break;
-      } else if (dontKnow == 708) {
-        var q := 0;
-        while (q < 1) {
-          label IfNest:
-          if (p == 67) {
-            break break;  // fine, since this is not a ghost context
-          } else if (*) {
-            break break;  // fine, since this is not a ghost context
-          } else if (k == 67) {
-            break break;  // error, because this is a ghost context
-          }
-          q := q + 1;
-        }
-      } else if (n == t) {
-        return;  // error: this is a ghost context trying to return from a non-ghost method
+        n := n + 1;
+        p := p + 1;
       }
-      n := n + 1;
-      p := p + 1;
+    }
+    method BreakMayNotBeFineHere_Ghost(ghost t: int)
+    {
+      var n := 0;
+      ghost var k := 0;
+      var p := 0;
+      while (true)
+        invariant n <= 112;
+        decreases 112 - n;
+      {
+        label MyStructure: {
+          if (k % 17 == 0) { break MyStructure; }  // error: break from ghost to non-ghost point
+          k := k + 1;
+        }
+        label MyOtherStructure:
+        if (k % 17 == 0) {
+          break MyOtherStructure;  // this break is fine
+        } else {
+          k := k + 1;
+        }
+
+        var dontKnow;
+        if (n == 112) {
+          ghost var m := 0;
+          label LoopLabel0:
+          label LoopLabel1:
+          while (m < 200) {
+            if (m % 103 == 0) {
+              if {
+                case true => break;  // fine, since this breaks out of the enclosing ghost loop
+                case true => break LoopLabel0;  // fine
+                case true => break LoopLabel1;  // fine
+              }
+            } else if (m % 101 == 0) {
+              break break;  // error: break out of non-ghost loop from ghost context
+            }
+            m := m + 3;
+          }
+          break;
+        } else if (dontKnow == 708) {
+          var q := 0;
+          while (q < 1) {
+            label IfNest:
+            if (p == 67) {
+              break break;  // fine, since this is not a ghost context
+            } else if (*) {
+              break break;  // fine, since this is not a ghost context
+            } else if (k == 67) {
+              break break;  // error, because this is a ghost context
+            }
+            q := q + 1;
+          }
+        } else if (n == t) {
+          return;  // error: this is a ghost context trying to return from a non-ghost method
+        }
+        n := n + 1;
+        p := p + 1;
+      }
     }
   }
-}
-} //HereAreMoreGhostTests
-module MiscMore { method DuplicateLabels(n: int) {
-  var x;
-  if (n < 7) {
+} // HereAreMoreGhostTests
+
+module MiscMore {
+  method DuplicateLabels(n: int) {
+    var x;
+    if (n < 7) {
+      label DuplicateLabel: x := x + 1;
+    } else {
+      label DuplicateLabel: x := x + 1;
+    }
     label DuplicateLabel: x := x + 1;
-  } else {
-    label DuplicateLabel: x := x + 1;
-  }
-  label DuplicateLabel: x := x + 1;
-  label DuplicateLabel: {
-    label AnotherLabel:
+    label DuplicateLabel: {
+      label AnotherLabel:
+      label DuplicateLabel:  // error: duplicate label
+      label OneMoreTime:
+      x := x + 1;
+    }
+    label DuplicateLabel:
     label DuplicateLabel:  // error: duplicate label
-    label OneMoreTime:
     x := x + 1;
+    label DuplicateLabel: x := x + 1;
   }
-  label DuplicateLabel:
-  label DuplicateLabel:  // error: duplicate label
-  x := x + 1;
-  label DuplicateLabel: x := x + 1;
-}
 
-// --------------- constructors -------------------------------------
+  // --------------- constructors -------------------------------------
 
-class ClassWithConstructor {
-  var y: int;
-  method NotTheOne() { }
-  constructor InitA() { }
-  constructor InitB() modifies this; { y := 20; }
-}
-
-class ClassWithoutConstructor {
-  method Init() modifies this; { }
-}
-
-method ConstructorTests()
-{
-  var o := new object;  // fine: does not have any constructors
-
-  o := new ClassWithoutConstructor;  // fine: don't need to call anything particular method
-  o := new ClassWithoutConstructor.Init();  // this is also fine
-
-  var c := new ClassWithConstructor.InitA();
-  c := new ClassWithConstructor;  // error: must call a constructor
-  c := new ClassWithConstructor.NotTheOne();  // error: must call a constructor, not an arbitrary method
-  c := new ClassWithConstructor.InitB();
-  c.InitB();  // error: not allowed to call constructors except during allocation
-}
-
-// ------------------- datatype destructors ---------------------------------------
-
-datatype DTD_List = DTD_Nil | DTD_Cons(Car: int, Cdr: DTD_List, ghost g: int)
-
-method DatatypeDestructors(d: DTD_List) {
-  if {
-    case d.DTD_Nil? =>
-      assert d == DTD_Nil;
-    case d.DTD_Cons? =>
-      var hd := d.Car;
-      var tl := d.Cdr;
-      assert hd == d.Cdr;  // type error
-      assert tl == d.Car;  // type error
-      assert d.DTD_Cons? == d.Car;  // type error
-      assert d == DTD_Cons(hd, tl, 5);
-      ghost var g0 := d.g;  // fine
+  class ClassWithConstructor {
+    var y: int;
+    method NotTheOne() { }
+    constructor InitA() { }
+    constructor InitB() modifies this; { y := 20; }  // error: don't use "this" in modifies of constructor
   }
-}
+
+  class ClassWithoutConstructor {
+    method Init() modifies this; { }
+  }
+
+  method ConstructorTests()
+  {
+    var o := new object;  // fine: does not have any constructors
+
+    o := new ClassWithoutConstructor;  // fine: don't need to call anything particular method
+    o := new ClassWithoutConstructor.Init();  // this is also fine
+
+    var c := new ClassWithConstructor.InitA();
+    c := new ClassWithConstructor;  // error: must call a constructor
+    c := new ClassWithConstructor.NotTheOne();  // error: must call a constructor, not an arbitrary method
+    c := new ClassWithConstructor.InitB();
+    c.InitB();  // error: not allowed to call constructors except during allocation
+  }
+
+  // ------------------- datatype destructors ---------------------------------------
+
+  datatype DTD_List = DTD_Nil | DTD_Cons(Car: int, Cdr: DTD_List, ghost g: int)
+
+  method DatatypeDestructors(d: DTD_List) {
+    if {
+      case d.DTD_Nil? =>
+        assert d == DTD_Nil;
+      case d.DTD_Cons? =>
+        var hd := d.Car;
+        var tl := d.Cdr;
+        assert hd == d.Cdr;  // type error
+        assert tl == d.Car;  // type error
+        assert d.DTD_Cons? == d.Car;  // type error
+        assert d == DTD_Cons(hd, tl, 5);
+        ghost var g0 := d.g;  // fine
+    }
+  }
 } // MiscMore
+
 // ------------------- print statements ---------------------------------------
+
 module GhostPrintAttempts {
-method PrintOnlyNonGhosts(a: int, ghost b: int)
-{
-  print "a: ", a, "\n";
-  print "b: ", b, "\n";  // error: print statement cannot take ghosts
+  method PrintOnlyNonGhosts(a: int, ghost b: int)
+  {
+    print "a: ", a, "\n";
+    print "b: ", b, "\n";  // error: print statement cannot take ghosts
+  }
 }
-}
+
 // ------------------- auto-added type arguments ------------------------------
+
 module MiscEvenMore {
-class GenericClass<T> { var data: T; }
+  class GenericClass<T> { var data: T; }
 
-method MG0(a: GenericClass, b: GenericClass)
-  requires a != null && b != null;
-  modifies a;
-{
-  a.data := b.data;  // allowed, since both a and b get the same auto type argument
-}
-
-method G_Caller()
-{
-  var x := new GenericClass;
-  MG0(x, x);  // fine
-  var y := new GenericClass;
-  MG0(x, y);  // also fine (and now y's type argument is constrained to be that of x's)
-  var z := new GenericClass<int>;
-  y.data := z.data;  // this will have the effect of unifying all type args so far to be 'int'
-  assert x.data == 5;  // this is type correct
-
-  var w := new GenericClass<bool>;
-  MG0(x, w);  // error: types don't match up
-}
-
-datatype GList<T> = GNil | GCons(hd: T, tl: GList)
-
-method MG1(l: GList, n: nat)
-{
-  if (n != 0) {
-    MG1(l, n-1);
-    MG1(GCons(12, GCons(20, GNil)), n-1);
+  method MG0(a: GenericClass, b: GenericClass)
+    requires a != null && b != null;
+    modifies a;
+  {
+    a.data := b.data;  // allowed, since both a and b get the same auto type argument
   }
-  var t := GCons(100, GNil);
-  t := GCons(120, l);  // error: types don't match up (List<T$0> versus List<int>)
-}
 
-// ------------------- calc statements ------------------------------
+  method G_Caller()
+  {
+    var x := new GenericClass;
+    MG0(x, x);  // fine
+    var y := new GenericClass;
+    MG0(x, y);  // also fine (and now y's type argument is constrained to be that of x's)
+    var z := new GenericClass<int>;
+    y.data := z.data;  // this will have the effect of unifying all type args so far to be 'int'
+    assert x.data == 5;  // this is type correct
 
-method TestCalc(m: int, n: int, a: bool, b: bool)
-{
-  calc {
-    a + b; // error: invalid line
-    n + m;
+    var w := new GenericClass<bool>;
+    MG0(x, w);  // error: types don't match up
   }
-  calc {
-    a && b;
-    n + m; // error: all lines must have the same type
+
+  datatype GList<T> = GNil | GCons(hd: T, tl: GList)
+
+  method MG1(l: GList, n: nat)
+  {
+    if (n != 0) {
+      MG1(l, n-1);
+      MG1(GCons(12, GCons(20, GNil)), n-1);
+    }
+    var t := GCons(100, GNil);
+    t := GCons(120, l);  // error: types don't match up (List<T$0> versus List<int>)
   }
-  calc ==> {
-    n + m; // error: ==> operator requires boolean lines
-    n + m + 1;
-    n + m + 2;
+
+  // ------------------- calc statements ------------------------------
+
+  method TestCalc(m: int, n: int, a: bool, b: bool)
+  {
+    calc {
+      a + b; // error: invalid line
+      n + m;
+    }
+    calc {
+      a && b;
+      n + m; // error: all lines must have the same type
+    }
+    calc ==> {
+      n + m; // error: ==> operator requires boolean lines
+      n + m + 1;
+      n + m + 2;
+    }
+    calc {
+      n + m;
+      n + m + 1;
+      ==> n + m + 2; // error: ==> operator requires boolean lines
+    }
   }
-  calc {
-    n + m;
-    n + m + 1;
-    ==> n + m + 2; // error: ==> operator requires boolean lines
-  }
-}
 } // MiscEvenMore
+
 module MyOwnModule {
   class SideEffectChecks {
     ghost var ycalc: int;
@@ -458,65 +468,66 @@ module MyOwnModule {
 }
   
 // ------------------- nameless constructors ------------------------------
+
 module MiscAgain {
-class Y {
-  var data: int;
-  constructor (x: int)
-    modifies this;
+  class Y {
+    var data: int;
+    constructor (x: int)
+    {
+      data := x;
+    }
+    constructor (y: bool)  // error: duplicate constructor name
+    {
+    }
+    method Test() {
+      var i := new Y(5);
+      i := new Y._ctor(7);  // but, in fact, it is also possible to use the underlying name
+      i := new Y;  // error: the class has a constructor, so one must be used
+      var s := new Luci.Init(5);
+      s := new Luci.FromArray(null);
+      s := new Luci(false);
+      s := new Luci._ctor(false);
+      s := new Luci.M();  // error: there is a constructor, so one must be called
+      s := new Luci;  // error: there is a constructor, so one must be called
+      var l := new Lamb;
+      l := new Lamb();  // error: there is no default constructor
+      l := new Lamb.Gwen();
+    }
+  }
+
+  class Luci {
+    constructor Init(y: int) { }
+    constructor (nameless: bool) { }
+    constructor FromArray(a: array<int>) { }
+    method M() { }
+  }
+
+  class Lamb {
+    method Jess() { }
+    method Gwen() { }
+  }
+
+  // ------------------- assign-such-that and ghosts ------------------------------
+
+  method AssignSuchThatFromGhost()
   {
-    data := x;
+    var x: int;
+    ghost var g: int;
+
+    x := *;
+    assume x == g;  // this mix of ghosts and non-ghosts is cool (but, of course,
+                    // the compiler will complain)
+
+    x :| assume x == g;  // this is cool, since it's an assume (but, of course, the
+                         // compiler will complain)
+
+    x :| x == 5;
+    g :| g <= g;
+    g :| assume g < g;  // the compiler will complain here, despite the LHS being
+                        // ghost -- and rightly so, since an assume is used
   }
-  constructor (y: bool)  // error: duplicate constructor name
-  {
-  }
-  method Test() {
-    var i := new Y(5);
-    i := new Y._ctor(7);  // but, in fact, it is also possible to use the underlying name
-    i := new Y;  // error: the class has a constructor, so one must be used
-    var s := new Luci.Init(5);
-    s := new Luci.FromArray(null);
-    s := new Luci(false);
-    s := new Luci._ctor(false);
-    s := new Luci.M();  // error: there is a constructor, so one must be called
-    s := new Luci;  // error: there is a constructor, so one must be called
-    var l := new Lamb;
-    l := new Lamb();  // error: there is no default constructor
-    l := new Lamb.Gwen();
-  }
-}
-
-class Luci {
-  constructor Init(y: int) { }
-  constructor (nameless: bool) { }
-  constructor FromArray(a: array<int>) { }
-  method M() { }
-}
-
-class Lamb {
-  method Jess() { }
-  method Gwen() { }
-}
-
-// ------------------- assign-such-that and ghosts ------------------------------
-
-method AssignSuchThatFromGhost()
-{
-  var x: int;
-  ghost var g: int;
-
-  x := *;
-  assume x == g;  // this mix of ghosts and non-ghosts is cool (but, of course,
-                  // the compiler will complain)
-
-  x :| assume x == g;  // this is cool, since it's an assume (but, of course, the
-                       // compiler will complain)
-
-  x :| x == 5;
-  g :| g <= g;
-  g :| assume g < g;  // the compiler will complain here, despite the LHS being
-                      // ghost -- and rightly so, since an assume is used
-}
 }  // MiscAgain
+
 // ------------------------ inferred type arguments ----------------------------
 
 // Put the following tests in a separate module, so that the method bodies will
@@ -570,17 +581,19 @@ module NoTypeArgs1 {
 }
 
 // ----------- let-such-that expressions ------------------------
-module MiscMisc {
-method LetSuchThat(ghost z: int, n: nat)
-{
-  var x: int;
-  x := var y :| y < 0; y;  // fine for the resolver (but would give a verification error for not being deterministic)
 
-  x := var w :| w == 2*w; w;  // fine (even for the verifier, this one)
-  x := var w := 2*w; w;  // error: the 'w' in the RHS of the assignment is not in scope
-  ghost var xg := var w :| w == 2*w; w;
+module MiscMisc {
+  method LetSuchThat(ghost z: int, n: nat)
+  {
+    var x: int;
+    x := var y :| y < 0; y;  // fine for the resolver (but would give a verification error for not being deterministic)
+
+    x := var w :| w == 2*w; w;  // fine (even for the verifier, this one)
+    x := var w := 2*w; w;  // error: the 'w' in the RHS of the assignment is not in scope
+    ghost var xg := var w :| w == 2*w; w;
+  }
 }
-}
+
 // ------------ quantified variables whose types are not inferred ----------
 
 module NonInferredType {
@@ -674,21 +687,25 @@ module UnderspecifiedTypes {
     var T3'1: multiset<int> :| 120 in T3'1;
     var T3'2: map<int,bool> :| 120 in T3'2;
     var T3'3: seq<int> :| 120 in T3'3;
+    var T3'4: bool :| 120 in T3'4;  // error: second argument to 'in' cannot be bool
     var T4 :| T4 <= S;
   }
 }
 
 // ------------------------- lemmas ------------------------------
-module MiscLemma { class L { }
-// a lemma is allowed to have out-parameters, but not a modifies clause
-lemma MyLemma(x: int, l: L) returns (y: int)
-  requires 0 <= x;
-  modifies l;
-  ensures 0 <= y;
-{
-  y := x;
+module MiscLemma {
+  class L { }
+
+  // a lemma is allowed to have out-parameters, but not a modifies clause
+  lemma MyLemma(x: int, l: L) returns (y: int)
+    requires 0 <= x;
+    modifies l;
+    ensures 0 <= y;
+  {
+    y := x;
+  }
 }
-}
+
 // ------------------------- statements in expressions ------------------------------
 
 module StatementsInExpressions {
@@ -844,18 +861,21 @@ module ObjectType {
 }
 
 // ------------------ modify statment ---------------------------
+
 module MiscModify {
-class ModifyStatementClass {
-  var x: int;
-  ghost var g: int;
-  method M()
-  {
-    modify x;  // error: type error
+  class ModifyStatementClass {
+    var x: int;
+    ghost var g: int;
+    method M()
+    {
+      modify x;  // error: type error
+    }
+    ghost method G0()
+      modifies `g;
+      modifies `x;  // error: non-ghost field mentioned in ghost context
   }
-  ghost method G0()
-    modifies `g;
-    modifies `x;  // error: non-ghost field mentioned in ghost context
-} }
+}
+
 module ModifyStatementClass_More {
   class C {
     var x: int;
@@ -930,60 +950,61 @@ module LhsLvalue {
 
 // ------------------- dirty loops -------------------
 module MiscEtc {
-method DirtyM(S: set<int>) {
-  forall s | s in S ensures s < 0;
-  assert s < 0; // error: s is unresolved
-}
-
-// ------------------- tuples -------------------
-
-method TupleResolution(x: int, y: int, r: real)
-{
-  var unit: () := ();
-  var expr: int := (x);
-  var pair: (int,int) := (x, x);
-  var triple: (int,int,int) := (y, x, x);
-  var badTriple: (int,real,int) := (y, x, r);  // error: parameters 1 and 2 have the wrong types
-  var quadruple: (int,real,int,real) := (y, r, x);  // error: trying to use a triple as a quadruple
-
-  assert unit == ();
-  assert pair.0 == pair.1;
-  assert triple.2 == x;
-
-  assert triple.2;  // error: 2 has type int, not the expected bool
-  assert triple.3 == pair.x;  // error(s):  3 and x are not destructors
-
-  var k0 := (5, (true, 2, 3.14));
-  var k1 := (((false, 10, 2.7)), 100, 120);
-  if k0.1 == k1.0 {
-    assert false;
-  } else if k0.1.1 < k1.0.1 {
-    assert k1.2 == 120;
+  method DirtyM(S: set<int>) {
+    forall s | s in S ensures s < 0;
+    assert s < 0; // error: s is unresolved
   }
 
-  // int and (int) are the same type (i.e., there are no 1-tuples)
-  var pp: (int) := x;
-  var qq: int := pp;
+  // ------------------- tuples -------------------
+
+  method TupleResolution(x: int, y: int, r: real)
+  {
+    var unit: () := ();
+    var expr: int := (x);
+    var pair: (int,int) := (x, x);
+    var triple: (int,int,int) := (y, x, x);
+    var badTriple: (int,real,int) := (y, x, r);  // error: parameters 1 and 2 have the wrong types
+    var quadruple: (int,real,int,real) := (y, r, x);  // error: trying to use a triple as a quadruple
+
+    assert unit == ();
+    assert pair.0 == pair.1;
+    assert triple.2 == x;
+
+    assert triple.2;  // error: 2 has type int, not the expected bool
+    assert triple.3 == pair.x;  // error(s):  3 and x are not destructors
+
+    var k0 := (5, (true, 2, 3.14));
+    var k1 := (((false, 10, 2.7)), 100, 120);
+    if k0.1 == k1.0 {
+      assert false;
+    } else if k0.1.1 < k1.0.1 {
+      assert k1.2 == 120;
+    }
+
+    // int and (int) are the same type (i.e., there are no 1-tuples)
+    var pp: (int) := x;
+    var qq: int := pp;
+  }
+
+  // ------------------- conversions -------------------
+
+  method TypeConversions(m: nat, i: int, r: real) returns (n: nat, j: int, s: real)
+  {
+    n := r as int;
+    j := r as int;
+    s := m as real;  // nat->real is allowed, just like int->real is
+    s := i as real;
+    s := i as real / 2;  // error: division expects two reals
+    s := 15 % s;  // error: modulus is not defined for reals
+
+    s := (2.0 / 1.7) + (r / s) - (--r) * -12.3;
+
+    s := s as real;  // fine (identity transform)
+    j := j as int;  // fine (identity transform)
+    j := n as int;  // fine (identity transform)
+  }
 }
 
-// ------------------- conversions -------------------
-
-method TypeConversions(m: nat, i: int, r: real) returns (n: nat, j: int, s: real)
-{
-  n := r as int;
-  j := r as int;
-  s := m as real;  // nat->real is allowed, just like int->real is
-  s := i as real;
-  s := i as real / 2;  // error: division expects two reals
-  s := 15 % s;  // error: modulus is not defined for reals
-
-  s := (2.0 / 1.7) + (r / s) - (--r) * -12.3;
-
-  s := s as real;  // fine (identity transform)
-  j := j as int;  // fine (identity transform)
-  j := n as int;  // fine (identity transform)
-}
-}
 // --- filling in type arguments and checking that there aren't too many ---
 
 module TypeArgumentCount {
@@ -1053,19 +1074,21 @@ module CycleError6 {
 }
 
 // --- attributes in top-level declarations ---
+
 module MiscIterator {
-iterator {:myAttribute x} Iter() {  // error: x does not refer to anything
+  iterator {:myAttribute x} Iter() {  // error: x does not refer to anything
+  }
+
+  class {:myAttribute x} C {  // error: x does not refer to anything
+  }
+
+  datatype {:myAttribute x} Dt = Blue  // error: x does not refer to anything
+
+  type {:myAttribute x} Something  // error: x does not refer to anything
+
+  type {:myAttribute x} Synonym = int  // error: x does not refer to anything
 }
 
-class {:myAttribute x} C {  // error: x does not refer to anything
-}
-
-datatype {:myAttribute x} Dt = Blue  // error: x does not refer to anything
-
-type {:myAttribute x} Something  // error: x does not refer to anything
-
-type {:myAttribute x} Synonym = int  // error: x does not refer to anything
-}
 module {:myAttribute x} Modulette {  // error: x does not refer to anything
 }
 
@@ -1120,13 +1143,14 @@ module OpaqueTypes1 {
 // ----- new trait -------------------------------------------
 
 module MiscTrait {
-trait J { }
-type JJ = J
-method TraitSynonym()
-{
-  var x := new JJ;  // error: new cannot be applied to a trait
+  trait J { }
+  type JJ = J
+  method TraitSynonym()
+  {
+    var x := new JJ;  // error: new cannot be applied to a trait
+  }
 }
-}
+
 // ----- set comprehensions where the term type is finite -----
 
 module ObjectSetComprehensions {
@@ -1142,50 +1166,52 @@ module ObjectSetComprehensions {
 }
 
 // ------ regression test for type checking of integer division -----
+
 module MiscTests {
-method IntegerDivision(s: set<bool>)
-{
-  var t := s / s;  // error: / cannot be used with sets
-}
+  method IntegerDivision(s: set<bool>)
+  {
+    var t := s / s;  // error: / cannot be used with sets
+  }
 
-// ----- decreases * tests ----
+  // ----- decreases * tests ----
 
-method NonTermination_A()
-{
-  NonTermination_B();  // error: to call a non-terminating method, the caller must be marked 'decreases *'
-}
+  method NonTermination_A()
+  {
+    NonTermination_B();  // error: to call a non-terminating method, the caller must be marked 'decreases *'
+  }
 
-method NonTermination_B()
-  decreases *;
-{
-  while true
+  method NonTermination_B()
     decreases *;
   {
-  }
-}
-
-method NonTermination_C()
-{
-  while true
-    decreases *;  // error: to use an infinite loop, the enclosing method must be marked 'decreases *'
-  {
-  }
-}
-
-method NonTermination_D()
-  decreases *;
-{
-  var n := 0;
-  while n < 100  // note, no 'decreases *' here, even if the nested loop may fail to terminate
-  {
-    while *
+    while true
       decreases *;
     {
     }
-    n := n + 1;
+  }
+
+  method NonTermination_C()
+  {
+    while true
+      decreases *;  // error: to use an infinite loop, the enclosing method must be marked 'decreases *'
+    {
+    }
+  }
+
+  method NonTermination_D()
+    decreases *;
+  {
+    var n := 0;
+    while n < 100  // note, no 'decreases *' here, even if the nested loop may fail to terminate
+    {
+      while *
+        decreases *;
+      {
+      }
+      n := n + 1;
+    }
   }
 }
-}
+
 // ------------ type variables whose values are not inferred ----------
 
 module NonInferredTypeVariables {
@@ -1259,11 +1285,6 @@ module NonInferredTypeVariables {
 
     var d0' := forall s :: s == {7} ==> s != {};
     var d0'' := forall s :: s <= {7} ==> s == {};
-
-    
-
-
-
   }
 }
 
@@ -1313,7 +1334,14 @@ module FrameTargetFields {
       modifies `z  // cool
     {
     }
-} } module FrameTargetFields_More {  class C {    var x: int    var y: int    ghost var z: int
+  } 
+}
+
+module FrameTargetFields_More {
+  class C {
+    var x: int
+    var y: int
+    ghost var z: int
     method P()
       modifies this
     {
@@ -1774,7 +1802,6 @@ module PrefixGeneratorDuplicates {
   colemma L()  // error: duplicate name (this once crashed Dafny)
 }
 
-
 // ------------------- unary TLA+ style predicates -------------------
 
 module TLAplusOperators {
@@ -1797,5 +1824,290 @@ module TLAplusOperators {
   function BadE(y: int): int  // error: body has wrong return type
   {
     && (|| 5 + y)  // error: bad types
+  }
+}
+
+// ------------------------- divided constructors -------------------
+
+module DividedConstructors {
+
+  class MyClass {
+    var a: nat
+    var b: nat
+    var c: nat
+    var n: MyClass
+    const t := 17
+    static const g := 25
+  
+    constructor Init(x: nat)
+    {
+      this.a := this.b;  // this use of "this" in RHS is allowed
+      ((this)).b := 10;
+      n := new MyClass();
+      n.a := 10;  // error: not allowed use of "this" in this way
+      c := a + b;  // error (x2): not allowed "this" in RHS
+      var th := this;  // error: not allowed "this" in RHS
+      Helper();  // error: not allowed to call instance method
+      var mc := new MyClass();
+      StaticHelper(mc);
+      this.StaticHelper(mc);  // "this" is benign here
+      StaticHelper(this);  // error: cannot use "this" here
+      P(a);  // error: cannot use "this" here
+      P(g);
+      P(this.g);  // "this" is benign here
+      modify this;  // error: cannot use "this" here
+      modify this`g;  // error: cannot use "this" here
+      modify `g;  // error: cannot use (implicit) "this" here
+      new;
+      a := a + b;
+      Helper();
+    }
+
+    method Helper()
+    {
+    }
+
+    static method StaticHelper(mc: MyClass)
+    {
+    }
+
+    static method P(x: nat)
+    {
+    }
+
+    constructor ()
+    {
+      a, c := 0, 0;
+      new;
+    }
+    
+  }
+}
+
+module ConstructorsThisUsage {
+  class C {
+    var x: int
+    constructor M()
+      requires this != null  // error: cannot use "this" here
+      modifies this  // error: cannot use "this" here (but we just issue a deprecation warning)
+      decreases this.x  // error: cannot use "this" here
+      ensures this.x == 5
+    {
+      x := 5;
+    }
+  }
+}
+
+module ReturnBeforeNew {
+  class C {
+    var a: int
+    var b: int
+    constructor TriesToReturnBeforeNew(xyz: int)
+    {
+      a := 0;
+      if xyz < 100 {
+        return;  // error: "return" is not allowed before "new;"
+      }
+    }
+  }
+}
+
+// ---------------- required zero initialization -----------------------
+
+module ZI {
+  // the following are different syntactic ways of saying that the type
+  // must support zero initialization
+  type ZA(0)
+  type ZB(==)(0)
+  type ZC(0)(==)
+  type ZD(==,0)
+  type ZE(0,==)
+  type Y
+
+  method P<G(0)>(x: G)
+  method M0<F,G(0)>(a: ZA, b: ZB, c: ZC, d: ZD, e: ZE, f: F, g: G, y: Y)
+  {
+    P(a);
+    P(b);
+    P(c);
+    P(d);
+    P(e);
+    P(f);  // error: type of argument is expected to support zero initialization
+    P(g);
+    P(y);  // error: type of argument is expected to support zero initialization
+  }
+
+  datatype List<T> = Nil | Cons(T, List<T>)  // this type COULD support zero initialization, regardless of T
+  method M1<G,H(0)>(xs: List<G>, ys: List<H>) {
+    P(xs);  // error: type of argument is expected to support zero initialization
+    P(ys);  // error: type of argument is expected to support zero initialization
+  }
+
+  class Cls {
+    var q: int
+    var rs: List<List<Cls>>
+  }
+  method M2(c: Cls) {
+    P(c);
+  }
+
+  newtype byte = x: int | 0 <= x < 256  // supports zero initialization
+  newtype MyInt = int  // supports zero initialization
+  newtype SixOrMore = x | 6 <= x witness 6
+  newtype AnotherSixOrMore = s: SixOrMore | true witness 6
+  newtype MySixOrMore = x: MyInt | 6 <= x witness 6
+  // The resolver uses the presence/absence of a "witness" clause to figure out if the type
+  // supports zero initialization.  This can be inaccurate.  If the type does not have a
+  // "witness" clause, some type replacements may slip by the resolver, but will then be
+  // caught by the verifier when the witness test is performed (because the witness test
+  // uses a zero value in the absence of a "witness" clause).  Regrettably, if a "witness"
+  // clause is supplied unnecessarily (perhaps to be explicit about the witness in the
+  // program text), then the resolver will treat the type as if it does not support
+  // zero initialization, and hence some good programs will be rejected by the resolver.
+  newtype UnclearA = x: int | true witness 0  // actually supports zero initialization, but has a "witness" clause
+  newtype UnclearB = x | 6 <= x  // "witness" clause omitted; type does not actually support zero initialization
+
+  method M3(a: byte, b: MyInt, c: SixOrMore, d: AnotherSixOrMore, e: MySixOrMore,
+            ua: UnclearA, ub: UnclearB) {
+    P(a);
+    P(b);
+    P(c);  // error: type of argument is expected to support zero initialization
+    P(d);  // error: type of argument is expected to support zero initialization
+    P(e);  // error: type of argument is expected to support zero initialization
+    P(ua);  // error: as far as the resolver can tell, type of argument does not support zero initialization
+    P(ub);  // fine, as far as the resolver can tell (but this would be caught later by the verifier)
+  }
+
+  type Sbyte = x: int | 0 <= x < 256  // supports zero initialization
+  type SMyInt = int  // supports zero initialization
+  type SSixOrMore = x | 6 <= x witness 6
+  type SAnotherSixOrMore = s: SSixOrMore | true witness 6
+  type SMySixOrMore = x: SMyInt | 6 <= x witness 6
+  type SUnclearA = x: int | true witness 0  // see note about for UnclearA
+  type SUnclearB = x | 6 <= x  // see note about for UnclearB
+
+  method M4(a: Sbyte, b: SMyInt, c: SSixOrMore, d: SAnotherSixOrMore, e: SMySixOrMore,
+            sua: SUnclearA, sub: SUnclearB) {
+    P<Sbyte>(a);
+    P<SMyInt>(b);
+    P<SSixOrMore>(c);  // error: type of argument is expected to support zero initialization
+    P<SAnotherSixOrMore>(d);  // error: type of argument is expected to support zero initialization
+    P<SMySixOrMore>(e);  // error: type of argument is expected to support zero initialization
+    P<SUnclearA>(sua);  // error: as far as the resolver can tell, type of argument does not support zero initialization
+    P<SUnclearB>(sub);  // fine, as far as the resolver can tell (but this would be caught later by the verifier)
+  }
+}
+
+abstract module ZI_RefinementAbstract {
+  type A
+  type A'
+  type B(0)
+  type B'(0)
+
+  type Mxx(0)
+  type Mx_
+  type M_x(0)
+  type M__
+
+  method Delta<Q(0),W,E(0),R>()
+}
+
+module ZI_RefinementConcrete0 refines ZI_RefinementAbstract {
+  newtype Six = x | 6 <= x witness 6  // does not support zero initialization
+  type A = int
+  type A' = Six
+  type B = int
+  type B' = Six  // error: RHS is expected to support zero initialization
+}
+
+module ZI_ExportSource {
+  export
+    reveals RGB
+    provides XYZ
+  datatype RGB = Red | Green | Blue
+  datatype XYZ = X | Y | Z
+}
+
+module ZI_RefinementConcrete1 refines ZI_RefinementAbstract {
+  import Z = ZI_ExportSource
+
+  method P<G(0)>(g: G)
+  method M(m: Z.RGB, n: Z.XYZ) {
+    P(m);  // error: Z.RGB is not known to support zero initialization (wish that this weren't so)
+    P(n);  // error: Z.XYZ is not known to support zero initialization
+  }
+
+  type Mxx  // error: not allowed to change zero-initialization setting
+  type Mx_
+  type M_x(0)
+  type M__(0)  // error: not allowed to change zero-initialization setting
+    
+  method Delta<
+    Q,  // error: not allowed to change zero-initialization setting
+    W,
+    E(0),
+    R(0)>()  // error: not allowed to change zero-initialization setting
+}
+
+// ----- constructor-less classes with need for initialization -----
+
+module ConstructorlessClasses {
+  class C<T(==)> {  // error: must have constructor
+    var x: int
+    var s: string
+    var t: set<T>
+    var u: T
+    const c: T
+  }
+
+  method Test()
+  {
+    var c := new C<set<real>>;
+    print "int: ", c.x, "\n";
+    print "string: ", c.s, "\n";
+    print "set<set<real>>: ", c.t, "\n";
+    print "real: ", c.u, "\n";
+    print "real: ", c.c, "\n";
+  }
+
+  codatatype Co = CoEnd | Suc(Co)
+
+  trait Trait {
+    var co: Co  // has no known initializer
+  }
+  class Class extends Trait {  // error: must have constructor, because of inherited field "co"
+  }
+
+  class CoClass0 {  // error: must have constructor
+    const co: Co
+  }
+
+  class CoClass1 {  // fine
+    const co: Co := CoEnd
+  }
+
+  trait CoTrait {
+    const co: Co := CoEnd
+  }
+  class CoClass2 extends CoTrait {  // fine
+  }
+
+  iterator Iter<T>(u: T) yields (v: T)
+  {
+  }
+}
+
+module GhostWitness {
+  type BadGhost_EffectlessArrow<A,B> = f: A -> B
+    | true
+    witness (GhostEffectlessArrowWitness<A,B>)  // error: a ghost witness must use the keyword "ghost"
+
+  type GoodGhost_EffectlessArrow<A,B> = f: A -> B
+    | true
+    ghost witness (GhostEffectlessArrowWitness<A,B>)
+
+  function GhostEffectlessArrowWitness<A,B>(a: A): B
+  {
+    var b: B :| true; b
   }
 }

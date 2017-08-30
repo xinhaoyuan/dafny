@@ -7,7 +7,6 @@
 class Cell {
   var val:int
   constructor (v:int)
-    modifies this
     ensures val == v
   {
     val := v;
@@ -30,15 +29,13 @@ class Point {
   var x:Cell, y:Cell, z:Cell
 
   constructor (a:int, b:int, c:int)
-    modifies this
     ensures Valid() && fresh(Repr - {this})
     ensures Value == (a, b, c)
   {
     x := new Cell(a);
     y := new Cell(b);
     z := new Cell(c);
-    Repr := {this};
-    Repr := Repr + {x, y, z};
+    Repr := {this, x, y, z};
     Value := (a, b, c);
   }
 
@@ -70,14 +67,12 @@ class Arm {
   var azim:Cell
 
   constructor (polar_in:int, azim_in:int)
-    modifies this
     ensures Valid() && fresh(Repr - {this})
     ensures Value == (polar_in, azim_in)
   {
     polar := new Cell(polar_in);
     azim := new Cell(azim_in);
-    Repr := {this};
-    Repr := Repr + {polar, azim};
+    Repr := {this, polar, azim};
     Value := (polar_in, azim_in);
   }
 
@@ -111,14 +106,13 @@ class Bot {
   var right:Arm
 
   constructor ()
-    modifies this
     ensures Valid() && fresh(Repr - {this})
   {
     pos := new Point(0, 0, 0);
     left := new Arm(0, 0);
     right := new Arm(0, 0);
-    Repr := {this};
-    Repr := Repr + pos.Repr + left.Repr + right.Repr;
+    new;
+    Repr := {this} + pos.Repr + left.Repr + right.Repr;
     reveal Valid();
   }
 

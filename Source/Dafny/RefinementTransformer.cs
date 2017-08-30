@@ -220,44 +220,45 @@ namespace Microsoft.Dafny
         if (nw is ModuleDecl) {
           reporter.Error(MessageSource.RefinementTransformer, nw, "a module ({0}) must refine another module", nw.Name);
         } else {
-          bool dDemandsEqualitySupport = ((OpaqueTypeDecl)d).MustSupportEquality;
+          var od = (OpaqueTypeDecl)d;
           if (nw is OpaqueTypeDecl) {
-            if (dDemandsEqualitySupport != ((OpaqueTypeDecl)nw).MustSupportEquality) {
+            if (od.MustSupportEquality != ((OpaqueTypeDecl)nw).MustSupportEquality) {
               reporter.Error(MessageSource.RefinementTransformer, nw, "type declaration '{0}' is not allowed to change the requirement of supporting equality", nw.Name);
             }
-            if (nw.TypeArgs.Count != d.TypeArgs.Count) {
-              reporter.Error(MessageSource.RefinementTransformer, nw, "type '{0}' is not allowed to change its number of type parameters (got {1}, expected {2})", nw.Name, nw.TypeArgs.Count, d.TypeArgs.Count);
+            if (od.Characteristics.MustSupportZeroInitialization != ((OpaqueTypeDecl)nw).Characteristics.MustSupportZeroInitialization) {
+              reporter.Error(MessageSource.RefinementTransformer, nw.tok, "type declaration '{0}' is not allowed to change the requirement of supporting zero initialization", nw.Name);
             }
-          } else if (dDemandsEqualitySupport) {
-            if (nw is ClassDecl) {
-              // fine, as long as "nw" takes the right number of type parameters
-              if (nw.TypeArgs.Count != d.TypeArgs.Count) {
-                reporter.Error(MessageSource.RefinementTransformer, nw, "opaque type '{0}' is not allowed to be replaced by a class that takes a different number of type parameters (got {1}, expected {2})", nw.Name, nw.TypeArgs.Count, d.TypeArgs.Count);
-              }
-            } else if (nw is NewtypeDecl) {
-              // fine, as long as "nw" does not take any type parameters
-              if (nw.TypeArgs.Count != 0) {
-                reporter.Error(MessageSource.RefinementTransformer, nw, "opaque type '{0}', which has {1} type argument{2}, is not allowed to be replaced by a newtype, which takes none", nw.Name, d.TypeArgs.Count, d.TypeArgs.Count == 1 ? "" : "s");
-              }
-            } else if (nw is CoDatatypeDecl) {
-              reporter.Error(MessageSource.RefinementTransformer, nw, "a type declaration that requires equality support cannot be replaced by a codatatype");
-            } else {
-              Contract.Assert(nw is IndDatatypeDecl || nw is TypeSynonymDecl);
-              if (nw.TypeArgs.Count != d.TypeArgs.Count) {
-                reporter.Error(MessageSource.RefinementTransformer, nw, "opaque type '{0}' is not allowed to be replaced by a type that takes a different number of type parameters (got {1}, expected {2})", nw.Name, nw.TypeArgs.Count, d.TypeArgs.Count);
+          } else {
+            if (od.MustSupportEquality) {
+              if (nw is ClassDecl || nw is NewtypeDecl) {
+                // fine
+              } else if (nw is CoDatatypeDecl) {
+                reporter.Error(MessageSource.RefinementTransformer, nw, "a type declaration that requires equality support cannot be replaced by a codatatype");
               } else {
+                Contract.Assert(nw is IndDatatypeDecl || nw is TypeSynonymDecl);
                 // Here, we need to figure out if the new type supports equality.  But we won't know about that until resolution has
                 // taken place, so we defer it until the PostResolve phase.
                 var udt = UserDefinedType.FromTopLevelDecl(nw.tok, nw);
                 postTasks.Enqueue(() => {
                   if (!udt.SupportsEquality) {
-                    reporter.Error(MessageSource.RefinementTransformer, udt.tok, "type '{0}' is used to refine an opaque type with equality support, but '{0}' does not support equality", udt.Name);
+                    reporter.Error(MessageSource.RefinementTransformer, udt.tok, "type '{0}', which does not support equality, is used to refine an opaque type with equality support", udt.Name);
                   }
                 });
               }
             }
-          } else if (d.TypeArgs.Count != nw.TypeArgs.Count) {
-            reporter.Error(MessageSource.RefinementTransformer, nw, "opaque type '{0}' is not allowed to be replaced by a type that takes a different number of type parameters (got {1}, expected {2})", nw.Name, nw.TypeArgs.Count, d.TypeArgs.Count);
+            if (od.Characteristics.MustSupportZeroInitialization) {
+              // We need to figure out if the new type supports zero initialization.  But we won't know about that until resolution has
+              // taken place, so we defer it until the PostResolve phase.
+              var udt = UserDefinedType.FromTopLevelDecl(nw.tok, nw);
+              postTasks.Enqueue(() => {
+                if (!Compiler.HasZeroInitializer(udt, udt.tok)) {
+                  reporter.Error(MessageSource.RefinementTransformer, udt.tok, "type '{0}', which does not support zero initialization, is used to refine an opaque type that expects zero initialization", udt.Name);
+                }
+              });
+            }
+          }
+          if (nw.TypeArgs.Count != d.TypeArgs.Count) {
+            reporter.Error(MessageSource.RefinementTransformer, nw, "type '{0}' is not allowed to change its number of type parameters (got {1}, expected {2})", nw.Name, nw.TypeArgs.Count, d.TypeArgs.Count);
           }
         }
       } else if (nw is OpaqueTypeDecl) {
@@ -446,6 +447,7 @@ namespace Microsoft.Dafny
 
     Method CloneMethod(Method m, List<MaybeFreeExpression> moreEnsures, Specification<Expression> decreases, BlockStmt newBody, bool checkPreviousPostconditions, Attributes moreAttributes) {
       Contract.Requires(m != null);
+      Contract.Requires(!(m is Constructor) || newBody == null || newBody is DividedBlockStmt);
       Contract.Requires(decreases != null);
 
       var tps = m.TypeArgs.ConvertAll(refinementCloner.CloneTypeParam);
@@ -462,11 +464,13 @@ namespace Microsoft.Dafny
         ens.AddRange(moreEnsures);
       }
 
-      var body = newBody ?? refinementCloner.CloneBlockStmt(m.BodyForRefinement);
       if (m is Constructor) {
+        var dividedBody = (DividedBlockStmt)newBody ?? refinementCloner.CloneDividedBlockStmt((DividedBlockStmt)m.BodyForRefinement);
         return new Constructor(new RefinementToken(m.tok, moduleUnderConstruction), m.Name, tps, ins,
-          req, mod, ens, decreases, body, refinementCloner.MergeAttributes(m.Attributes, moreAttributes), null, m);
-      } else if (m is InductiveLemma) {
+          req, mod, ens, decreases, dividedBody, refinementCloner.MergeAttributes(m.Attributes, moreAttributes), null, m);
+      }
+      var body = newBody ?? refinementCloner.CloneBlockStmt(m.BodyForRefinement);
+      if (m is InductiveLemma) {
         return new InductiveLemma(new RefinementToken(m.tok, moduleUnderConstruction), m.Name, m.HasStaticKeyword, tps, ins, m.Outs.ConvertAll(refinementCloner.CloneFormal),
           req, mod, ens, decreases, body, refinementCloner.MergeAttributes(m.Attributes, moreAttributes), null, m);
       } else if (m is CoLemma) {
@@ -749,8 +753,11 @@ namespace Microsoft.Dafny
             //     break;
             // }
             // Here's how we actually compute it:
-            if (o.EqualitySupport != TypeParameter.EqualitySupportValue.InferredRequired && o.EqualitySupport != n.EqualitySupport) {
+            if (o.Characteristics.EqualitySupport != TypeParameter.EqualitySupportValue.InferredRequired && o.Characteristics.EqualitySupport != n.Characteristics.EqualitySupport) {
               reporter.Error(MessageSource.RefinementTransformer, n.tok, "type parameter '{0}' is not allowed to change the requirement of supporting equality", n.Name);
+            }
+            if (o.Characteristics.MustSupportZeroInitialization != n.Characteristics.MustSupportZeroInitialization) {
+              reporter.Error(MessageSource.RefinementTransformer, n.tok, "type parameter '{0}' is not allowed to change the requirement of supporting zero initialization", n.Name);
             }
           }
         }
@@ -798,9 +805,12 @@ namespace Microsoft.Dafny
                 else
                 {
                     // Here's how we actually compute it:
-                    if (o.EqualitySupport != TypeParameter.EqualitySupportValue.InferredRequired && o.EqualitySupport != n.EqualitySupport)
+                    if (o.Characteristics.EqualitySupport != TypeParameter.EqualitySupportValue.InferredRequired && o.Characteristics.EqualitySupport != n.Characteristics.EqualitySupport)
                     {
                         reporter.Error(MessageSource.RefinementTransformer, n.tok, "type parameter '{0}' is not allowed to change the requirement of supporting equality", n.Name);
+                    }
+                    if (o.Characteristics.MustSupportZeroInitialization != n.Characteristics.MustSupportZeroInitialization) {
+                      reporter.Error(MessageSource.RefinementTransformer, n.tok, "type parameter '{0}' is not allowed to change the requirement of supporting zero initialization", n.Name);
                     }
                 }
             }
@@ -879,12 +889,43 @@ namespace Microsoft.Dafny
     BlockStmt MergeBlockStmt(BlockStmt skeleton, BlockStmt oldStmt) {
       Contract.Requires(skeleton != null);
       Contract.Requires(oldStmt != null);
+      Contract.Requires(skeleton is DividedBlockStmt == oldStmt is DividedBlockStmt);
 
+      if (skeleton is DividedBlockStmt) {
+        var sbsSkeleton = (DividedBlockStmt)skeleton;
+        var sbsOldStmt = (DividedBlockStmt)oldStmt;
+        string hoverText;
+        var bodyInit = MergeStmtList(sbsSkeleton.BodyInit, sbsOldStmt.BodyInit, out hoverText);
+        if (hoverText.Length != 0) {
+          reporter.Info(MessageSource.RefinementTransformer, sbsSkeleton.SeparatorTok ?? sbsSkeleton.Tok, hoverText);
+        }
+        var bodyProper = MergeStmtList(sbsSkeleton.BodyProper, sbsOldStmt.BodyProper, out hoverText);
+        if (hoverText.Length != 0) {
+          reporter.Info(MessageSource.RefinementTransformer, sbsSkeleton.EndTok, hoverText);
+        }
+        return new DividedBlockStmt(sbsSkeleton.Tok, sbsSkeleton.EndTok, bodyInit, sbsSkeleton.SeparatorTok, bodyProper);
+      } else {
+        string hoverText;
+        var body = MergeStmtList(skeleton.Body, oldStmt.Body, out hoverText);
+        if (hoverText.Length != 0) {
+          reporter.Info(MessageSource.RefinementTransformer, skeleton.EndTok, hoverText);
+        }
+        return new BlockStmt(skeleton.Tok, skeleton.EndTok, body);
+      }
+    }
+
+    List<Statement> MergeStmtList(List<Statement> skeleton, List<Statement> oldStmt, out string hoverText) {
+      Contract.Requires(skeleton != null);
+      Contract.Requires(oldStmt != null);
+      Contract.Ensures(Contract.ValueAtReturn(out hoverText) != null);
+      Contract.Ensures(Contract.Result<List<Statement>>() != null);
+
+      hoverText = "";
       var body = new List<Statement>();
       int i = 0, j = 0;
-      while (i < skeleton.Body.Count) {
-        var cur = skeleton.Body[i];
-        if (j == oldStmt.Body.Count) {
+      while (i < skeleton.Count) {
+        var cur = skeleton[i];
+        if (j == oldStmt.Count) {
           if (!(cur is SkeletonStatement)) {
             MergeAddStatement(cur, body);
           } else if (((SkeletonStatement)cur).S == null) {
@@ -894,7 +935,7 @@ namespace Microsoft.Dafny
           }
           i++;
         } else {
-          var oldS = oldStmt.Body[j];
+          var oldS = oldStmt[j];
           /* See how the two statements match up.
            *   oldS                         cur                         result
            *   ------                      ------                       ------
@@ -934,7 +975,7 @@ namespace Microsoft.Dafny
             var c = (SkeletonStatement)cur;
             var S = c.S;
             if (S == null) {
-              var nxt = i + 1 == skeleton.Body.Count ? null : skeleton.Body[i + 1];
+              var nxt = i + 1 == skeleton.Count ? null : skeleton[i + 1];
               if (nxt != null && nxt is SkeletonStatement && ((SkeletonStatement)nxt).S == null) {
                 // "...; ...;" is the same as just "...;", so skip this one
               } else {
@@ -961,8 +1002,8 @@ namespace Microsoft.Dafny
                   hoverTextA += sepA + Printer.StatementToString(s);
                   sepA = "\n";
                   j++;
-                  if (j == oldStmt.Body.Count) { break; }
-                  oldS = oldStmt.Body[j];
+                  if (j == oldStmt.Count) { break; }
+                  oldS = oldStmt[j];
                 }
                 if (hoverTextA.Length != 0) {
                   reporter.Info(MessageSource.RefinementTransformer, c.Tok, hoverTextA);
@@ -1226,18 +1267,14 @@ namespace Microsoft.Dafny
         }
       }
       // implement the implicit "...;" at the end of each block statement skeleton
-      var hoverText = "";
       var sep = "";
-      for (; j < oldStmt.Body.Count; j++) {
-        var b = oldStmt.Body[j];
+      for (; j < oldStmt.Count; j++) {
+        var b = oldStmt[j];
         body.Add(refinementCloner.CloneStmt(b));
         hoverText += sep + Printer.StatementToString(b);
         sep = "\n";
       }
-      if (hoverText.Length != 0) {
-        reporter.Info(MessageSource.RefinementTransformer, skeleton.EndTok, hoverText);
-      }
-      return new BlockStmt(skeleton.Tok, skeleton.EndTok, body);
+      return body;
     }
 
     private bool LeftHandSidesAgree(List<Expression> old, List<Expression> nw) {
@@ -1501,7 +1538,11 @@ namespace Microsoft.Dafny
       moduleUnderConstruction = m;
     }
     public override BlockStmt CloneMethodBody(Method m) {
-      return CloneBlockStmt(m.BodyForRefinement);
+      if (m.BodyForRefinement is DividedBlockStmt) {
+        return CloneDividedBlockStmt((DividedBlockStmt)m.BodyForRefinement);
+      } else {
+        return CloneBlockStmt(m.BodyForRefinement);
+      }
     }
     public override IToken Tok(IToken tok) {
       return new RefinementToken(tok, moduleUnderConstruction);

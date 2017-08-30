@@ -22,7 +22,6 @@ module M0 {
     }
 
     constructor CreateConstant(x: int)
-      modifies this;
       ensures Valid() && fresh(Repr - {this});
     {
       kind, value := Constant, x;
@@ -31,7 +30,6 @@ module M0 {
     }
 
     constructor CreateIdent(name: int)
-      modifies this;
       ensures Valid() && fresh(Repr - {this});
     {
       kind, value := Ident, name;
@@ -40,11 +38,10 @@ module M0 {
     }
 
     constructor CreateBinary(op: int, left: Expr, right: Expr)
-      requires left != null && left.Valid() && this !in left.Repr;
-      requires right != null && right.Valid() && this !in right.Repr;
-      requires left.Repr !! right.Repr;
-      modifies this;
-      ensures Valid() && fresh(Repr - {this} - left.Repr - right.Repr);
+      requires left != null && left.Valid()
+      requires right != null && right.Valid()
+      requires left.Repr !! right.Repr
+      ensures Valid() && fresh(Repr - {this} - left.Repr - right.Repr)
     {
       kind, value := Binary, op;
       this.left, this.right := left, right;

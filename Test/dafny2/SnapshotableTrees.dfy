@@ -137,10 +137,10 @@ module SnapTree {
     }
 
     constructor Empty()
-      modifies this;
       ensures Valid() && Contents == [] && !IsReadonly;
       ensures MutableRepr <= Repr && fresh(Repr - {this});
     {
+      new;
       Contents := [];
       IsReadonly := false;
       MutableRepr := {this};
@@ -283,24 +283,22 @@ module SnapTree {
     }
 
     constructor Init(x: int)
-      modifies this;
       ensures NodeValid() && fresh(Repr - {this});
       ensures Contents == [x];
     {
       Contents := [x];
       Repr := {this};
       left, data, right := null, x, null;
+      new;
       Tree.SmallIsSorted([]);
       Tree.SmallIsSorted([x]);
       reveal NodeValid();
     }
 
     constructor Build(left: Node, x: int, right: Node)
-      requires this != left && this != right;
-      requires left != null ==> left.NodeValid() && this !in left.Repr && Tree.AllBelow(left.Contents, x);
-      requires right != null ==> right.NodeValid() && this !in right.Repr && Tree.AllAbove(x, right.Contents);
+      requires left != null ==> left.NodeValid() && Tree.AllBelow(left.Contents, x);
+      requires right != null ==> right.NodeValid() && Tree.AllAbove(x, right.Contents);
       requires left != null && right != null ==> left.Repr !! right.Repr;
-      modifies this;
       ensures NodeValid();
       ensures Contents == CombineSplit(left, x, right);
       ensures left == null && right == null ==> fresh(Repr - {this});
@@ -319,6 +317,7 @@ module SnapTree {
         Contents := Contents + right.Contents;
         Repr := Repr + right.Repr;
       }
+      new;
       ghost var L := if left == null then [] else left.Contents;
       ghost var R := if right == null then [] else right.Contents;
       Tree.SmallIsSorted([]);
@@ -571,11 +570,11 @@ module SnapTree {
     }
 
     constructor Init(t: Tree)
-      requires t != null && t.Valid() && this !in t.Repr;
-      modifies this;
+      requires t != null && t.Valid();
       ensures Valid() && fresh(IterRepr - {this});
       ensures T == t && Contents == t.Contents && N == -1;
     {
+      new;
       Init_Aux(t);
     }
     method Init_Aux(t: Tree)

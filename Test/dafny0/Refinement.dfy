@@ -116,7 +116,6 @@ module Abstract {
       this in Repr && null !in Repr
     }
     constructor Init()
-      modifies this;
       ensures N == 0;
       ensures Valid() && fresh(Repr - {this});
     {
@@ -150,6 +149,7 @@ module Concrete refines Abstract {
     }
     constructor Init()
     {
+      new;
       a := b;
     }
     method Inc()
@@ -187,6 +187,7 @@ module IncorrectConcrete refines Abstract {
     }
     constructor Init()
     {  // error: postcondition violation
+      new;
       a := b;
     }
     method Inc()

@@ -32,8 +32,8 @@ class MyClassWithCtor extends Tr {
   var r: FavoriateReals
   var nes: NonEmptyIntSet
   constructor Init(y: int)
-    modifies this
   {
+    new;
     nes := nes + {y};
   }
 }
