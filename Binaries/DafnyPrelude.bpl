@@ -1016,9 +1016,6 @@ axiom (forall<U,V> m: Map U V :: { Set#Card(Map#Domain(m)) }
 
 function Map#Values<U,V>(Map U V) : Set V;
 
-axiom (forall<U,V> m: Map U V :: { Set#Card(Map#Values(m)) }
-  Set#Card(Map#Values(m)) == Map#Card(m));
-
 axiom (forall<U,V> m: Map U V, v: V :: { Map#Values(m)[v] }
   Map#Values(m)[v] ==
 	(exists u: U :: { Map#Domain(m)[u] } { Map#Elements(m)[u] }	
@@ -1086,9 +1083,6 @@ axiom (forall<U, V> m: Map U V, u: U, v: V :: { Map#Card(Map#Build(m, u, v)) }
   Map#Domain(m)[u] ==> Map#Card(Map#Build(m, u, v)) == Map#Card(m));
 axiom (forall<U, V> m: Map U V, u: U, v: V :: { Map#Card(Map#Build(m, u, v)) }
   !Map#Domain(m)[u] ==> Map#Card(Map#Build(m, u, v)) == Map#Card(m) + 1);
-axiom (forall<U, V> m: Map U V, u: U, v: V :: { Map#Values(Map#Build(m, u, v)) }
-  Map#Values(Map#Build(m, u, v)) == Set#UnionOne(Map#Values(m), v));
-
 
 //equality for maps
 function Map#Equal<U, V>(Map U V, Map U V): bool;
@@ -1176,9 +1170,6 @@ axiom (forall<U, V> m: IMap U V, u: U, u': U, v: V ::
                IMap#Elements(IMap#Build(m, u, v))[u'] == v) &&
   (u' != u ==> IMap#Domain(IMap#Build(m, u, v))[u'] == IMap#Domain(m)[u'] &&
                IMap#Elements(IMap#Build(m, u, v))[u'] == IMap#Elements(m)[u']));
-
-axiom (forall<U, V> m: IMap U V, u: U, v: V :: { IMap#Values(IMap#Build(m, u, v)) }
-  IMap#Values(IMap#Build(m, u, v)) == Set#UnionOne(IMap#Values(m), v));
 
 //equality for imaps
 function IMap#Equal<U, V>(IMap U V, IMap U V): bool;
