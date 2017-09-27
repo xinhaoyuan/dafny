@@ -3177,7 +3177,8 @@ namespace Microsoft.Dafny {
     IToken INamedRegion.BodyStartTok { get { return BodyStartTok; } }
     IToken INamedRegion.BodyEndTok { get { return BodyEndTok; } }
     string INamedRegion.Name { get { return Name; } }
-    public readonly ModuleDefinition Module;
+    public readonly ModuleDefinition Module; // For non-abstract modules, this point to the parent module definition.
+                                             // Otherwise this goes to the original module definition.
     public readonly Attributes Attributes;
     public readonly IToken RefinementBaseName;  // null if no refinement base
     public ModuleDecl RefinementBaseRoot; // filled in early during resolution, corresponds to RefinementBaseName[0]
