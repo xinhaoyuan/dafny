@@ -114,11 +114,7 @@ namespace Microsoft.Dafny {
         }
         int indent = 0;
         if (!m.IsDefaultModule) {
-          var m_prime = m;
-          while (DafnyOptions.O.IronDafny && m_prime.ClonedFrom != null) {
-            m_prime = m.ClonedFrom;
-          }
-          wr.WriteLine("namespace @{0} {{", m_prime.CompileName);
+          wr.WriteLine("namespace @{0} {{", m.CompileName);
         } else {
           wr.WriteLine("namespace @__default {");
         }
@@ -746,9 +742,6 @@ namespace Microsoft.Dafny {
 
     string DtName(DatatypeDecl decl) {
       var d = (TopLevelDecl)decl;
-      while (DafnyOptions.O.IronDafny && d.ClonedFrom != null) {
-        d = (TopLevelDecl)d.ClonedFrom;
-      }
       return d.Module.IsDefaultModule ? d.CompileName : d.FullCompileName;
     }
     string DtCtorName(DatatypeCtor ctor) {
@@ -1288,7 +1281,7 @@ namespace Microsoft.Dafny {
         return "bool";
       } else if (xType is CharType) {
         return "char";
-      } else if (xType is IntType) {
+      } else if (xType is IntType || xType is BigOrdinalType) {
         return "BigInteger";
       } else if (xType is RealType) {
         return "Dafny.BigRational";
@@ -1321,14 +1314,6 @@ namespace Microsoft.Dafny {
             rc != null &&
             rc.Module != null &&
             !rc.Module.IsDefaultModule) {
-          while (rc.ClonedFrom != null || rc.ExclusiveRefinement != null) {
-            if (rc.ClonedFrom != null) {
-              rc = (TopLevelDecl)rc.ClonedFrom;
-            } else {
-              Contract.Assert(rc.ExclusiveRefinement != null);
-              rc = rc.ExclusiveRefinement;
-            }
-          }
           s = rc.FullCompileName;
         }
         return TypeName_UDT(s, udt.TypeArgs, wr, udt.tok);
@@ -1463,7 +1448,7 @@ namespace Microsoft.Dafny {
         initializerIsKnown = true;
         defaultValue = "'D'";
         return;
-      } else if (xType is IntType) {
+      } else if (xType is IntType || xType is BigOrdinalType) {
         hasZeroInitializer = true;
         initializerIsKnown = true;
         defaultValue = "BigInteger.Zero";
@@ -1553,7 +1538,7 @@ namespace Microsoft.Dafny {
             if (compiler != null && defaultValue != null) {
               // return the lambda expression ((Ty0 x0, Ty1 x1, Ty2 x2) => defaultValue)
               defaultValue = string.Format("(({0}) => {1})",
-                Util.Comma(udt.TypeArgs.Count - 1, i => string.Format("{0} x{1}", compiler.TypeName(udt.TypeArgs[i], wr, udt.tok), i)),
+                Util.Comma(", ", udt.TypeArgs.Count - 1, i => string.Format("{0} x{1}", compiler.TypeName(udt.TypeArgs[i], wr, udt.tok), i)),
                 defaultValue);
             }
             return;
@@ -1617,14 +1602,6 @@ namespace Microsoft.Dafny {
               rc != null &&
               rc.Module != null &&
               !rc.Module.IsDefaultModule) {
-            while (rc.ClonedFrom != null || rc.ExclusiveRefinement != null) {
-              if (rc.ClonedFrom != null) {
-                rc = (TopLevelDecl)rc.ClonedFrom;
-              } else {
-                Contract.Assert(rc.ExclusiveRefinement != null);
-                rc = rc.ExclusiveRefinement;
-              }
-            }
             s = "@" + rc.FullCompileName;
           }
           if (udt.TypeArgs.Count != 0) {
@@ -1882,7 +1859,7 @@ namespace Microsoft.Dafny {
 
       } else if (stmt is ForallStmt) {
         var s = (ForallStmt)stmt;
-        if (s.Kind != ForallStmt.ParBodyKind.Assign) {
+        if (s.Kind != ForallStmt.BodyKind.Assign) {
           // Call and Proof have no side effects, so they can simply be optimized away.
           return wr;
         } else if (s.BoundVars.Count == 0) {
@@ -2774,7 +2751,9 @@ namespace Microsoft.Dafny {
           } else {
             TrParenExpr(e.Obj, wr, inLetExprBody);
           }
-          wr.Write(".@{0}", sf.CompiledName);
+          if (sf.CompiledName.Length != 0) {
+            wr.Write(".@{0}", sf.CompiledName);
+          }
           if (sf is ConstantField) {
             wr.Write("()");  // constant fields are compiled as functions (possibly with a backing field)
           }
@@ -2954,11 +2933,11 @@ namespace Microsoft.Dafny {
             TrExpr(e.E, wr, inLetExprBody);
             wr.Write(")");
           } else {
-            // (int or bv) -> (int or bv)
+            // (int or bv) -> (int or bv or ORDINAL)
             var fromNative = AsNativeType(e.E.Type);
             var toNative = AsNativeType(e.ToType);
             if (fromNative == null && toNative == null) {
-              // big-integer (int or bv) -> big-integer (int or bv), so identity will do
+              // big-integer (int or bv) -> big-integer (int or bv or ORDINAL), so identity will do
               TrExpr(e.E, wr, inLetExprBody);
             } else if (fromNative != null && toNative == null) {
               // native (int or bv) -> big-integer (int or bv)
@@ -3004,6 +2983,11 @@ namespace Microsoft.Dafny {
             TrParenExpr(e.E, wr, inLetExprBody);
             wr.Write(".ToBigInteger()");
           }
+        } else {
+          Contract.Assert(e.E.Type.IsBigOrdinalType);
+          Contract.Assert(e.ToType.IsNumericBased(Type.NumericPersuation.Int));
+          // identity will do
+          TrExpr(e.E, wr, inLetExprBody);
         }
 
       } else if (expr is BinaryExpr) {

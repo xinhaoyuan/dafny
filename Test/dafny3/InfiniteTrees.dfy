@@ -138,7 +138,7 @@ lemma Theorem0(t: Tree)
 }
 lemma FindNil(s: Stream<Tree>, n: nat) returns (k: nat)
   requires LowerThan(s, n);
-  ensures !InfiniteEverywhere#[k](s);
+  ensures !InfiniteEverywhere#[k as ORDINAL](s);
 {
   match s {
     case Nil => k := 1;
@@ -395,7 +395,7 @@ lemma Proposition3b_Lemma(t: Tree, h: nat, p: Stream<int>)
           // assert LowerThan(ch, h);
       }
       // Putting these together, by ch.Cons? and the definition of LowerThan(ch, h), we get:
-      // assert LowerThan(ch.head.children, h-1);
+      assert LowerThan(ch.head.children, h-1);
       // And now we can invoke the induction hypothesis:
       // Proposition3b_Lemma(ch.head, h-1, tail);
   }

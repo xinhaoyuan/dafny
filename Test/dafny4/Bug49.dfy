@@ -5,14 +5,14 @@ method Main()
 {
   print apply(i => i + 1, 5), "\n";
   print mapply(map[5 := 6], 5), "\n";
-  var f;
+  var f: int -> int;
   print five(f), "\n";
 }
 
 // -----
 // test that the definition axiom for function "apply" is available
 
-function method apply(f:int->int, a:int): int
+function method apply(f:int~>int, a:int): int
   reads f.reads
   requires f.requires(a)
 {

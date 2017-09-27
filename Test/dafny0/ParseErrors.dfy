@@ -149,3 +149,9 @@ method Displays()
     ensures map[] == map[]
     ensures imap[] == imap[]
 
+method SetComprehensionParsingRegression0()
+{
+  // these once had crashed the parser
+  var s0 := set x,y;
+  var s1 := set x,y | true;
+}

@@ -1,7 +1,7 @@
 // RUN: %dafny /print:"%t.print" "%s" > "%t"
 // RUN: %diff "%s.expect" "%t"
 
-function method Twice<A>(f : A -> A): A -> A
+function method Twice<A>(f : A ~> A): A ~> A
 {
   x requires f.requires(x) && f.requires(f(x))
     reads f.reads(x) reads if f.requires(x) then f.reads(f(x)) else {}
@@ -12,9 +12,8 @@ method Simple() {
   assert Twice(x => x + 1)(0) == 2;
   assert Twice(Twice(x => x + 1))(0) == 4;
 
-  // why does these fail? need requires/reads for literals?
-  // assert Twice(Twice)(x => x + 1)(0) == 4;
-  // assert Twice(Twice)(Twice)(x => x + 1)(0) == 16;
+  assert Twice(Twice)(x => x + 1)(0) == 4;
+  assert Twice(Twice)(Twice)(x => x + 1)(0) == 16;
 }
 
 method WithReads() {
@@ -29,7 +28,7 @@ method WithReads() {
 }
 
 
-function method Twice_bad<A>(f : A -> A): A -> A
+function method Twice_bad<A>(f : A ~> A): A ~> A
 {
   x requires f.requires(x) && f.requires(f(x))
     reads f.reads(x) + f.reads(f(x))

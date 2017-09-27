@@ -15,7 +15,7 @@ module _System {
     var Length: int  // immutable
   }
 
-  class {:compile false} _#Func0<R> {
+  class {:compile false} /*_#Func0*/ () ~> +R {
     function requires(): bool
       reads reads()
 
@@ -23,19 +23,19 @@ module _System {
       reads reads()
   }
 
-  type {:compile false} _#PartialFunc0<R> = f: () -> R
+  type {:compile false} /*_#PartialFunc0*/ () --> +R = f: () ~> R
     | f.reads() == {}
     /*special witness*/
 
-  type {:compile false} _#TotalFunc0<R> = f: _#PartialFunc0<R>
+  type {:compile false} /*_#TotalFunc0*/ () -> +R = f: () --> R
     | f.requires()
     /*special witness*/
 
-  datatype _tuple#0 = _#Make0
+  datatype /*_tuple#0*/ () = _#Make0
 
-  datatype {:compile false} _tuple#2<T0, T1> = _#Make2(0: T0, 1: T1)
+  datatype {:compile false} /*_tuple#2*/ (+T0, +T1) = _#Make2(0: T0, 1: T1)
 
-  class {:compile false} _#Func1<T0, R> {
+  class {:compile false} /*_#Func1*/ -T0 ~> +R {
     function requires(x0: T0): bool
       reads reads(x0)
 
@@ -43,20 +43,22 @@ module _System {
       reads reads(x0)
   }
 
-  type {:compile false} _#PartialFunc1<T0, R> = f: T0 -> R
+  type {:compile false} /*_#PartialFunc1*/ -T0 --> +R = f: T0 ~> R
     | forall x0: T0 :: f.reads(x0) == {}
     /*special witness*/
 
-  type {:compile false} _#TotalFunc1<T0, R> = f: _#PartialFunc1<T0, R>
+  type {:compile false} /*_#TotalFunc1*/ -T0 -> +R = f: T0 --> R
     | forall x0: T0 :: f.requires(x0)
     /*special witness*/
 }
-// bitvector types in use: bv67 bv32 bv7 bv0
+// bitvector types in use: bv67 bv32 bv7 bv0 bv300
 */
 
 /* CALL GRAPH for module _module:
- * SCC at height 8:
+ * SCC at height 9:
  *   _default.Main
+ * SCC at height 8:
+ *   _default.OrdinalTests
  * SCC at height 7:
  *   int64
  * SCC at height 6:
@@ -151,9 +153,22 @@ method Main()
   print x, " ", handful, " ", a0, " ", w, "\n";
   x, handful, a0, w := a.Length, a.Length as Handful, a.Length as Abundance, a.Length as bv32;
   print x, " ", handful, " ", a0, " ", w, "\n";
+  OrdinalTests();
 }
 
-Dafny program verifier finished with 6 verified, 0 errors
+method OrdinalTests()
+{
+  var ord: ORDINAL := 143;
+  var iord: int := ord as int;
+  var oord: ORDINAL := iord as ORDINAL;
+  print "Something about ORDINAL: ", ord, " ", iord, " ", oord, " ", ord + 4, " ", ord - 100, "\n";
+  print "ORDINAL and bitvectors: ", 20 as bv32 as ORDINAL, " ", 20 as bv300 as ORDINAL, "\n";
+  print ord.IsLimit, " ", ord.Offset, " ", ord.IsNat, "\n";
+  ord := 0;
+  print ord.IsLimit, " ", ord.Offset, " ", ord.IsNat, "\n";
+}
+
+Dafny program verifier finished with 7 verified, 0 errors
 Program compiled successfully
 Running...
 
@@ -191,3 +206,7 @@ got 14, expected 14
 120 -1 4 8589934592 6345789 -9223372036854775808
 4 4 4 4
 68 68 68 68
+Something about ORDINAL: 143 143 143 147 43
+ORDINAL and bitvectors: 20 20
+False 143 True
+True 0 True
