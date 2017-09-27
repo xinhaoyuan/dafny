@@ -1802,7 +1802,7 @@ namespace Microsoft.Dafny
       Contract.Requires(compilationModuleClones != null);
       var errCount = reporter.Count(ErrorLevel.Error);
 
-      var mod = new ModuleDefinition(Token.NoToken, Name + ".Abs", true, true, true, null, null, null, false);
+      var mod = new ModuleDefinition(Token.NoToken, Name + ".Abs", true, true, true, null, p.ModuleDef, null, false);
       mod.Height = Height;
       mod.IsToBeVerified = p.ModuleDef.IsToBeVerified;
       bool hasDefaultClass = false;

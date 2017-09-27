@@ -275,13 +275,12 @@ namespace Microsoft.Dafny
 
       // Check explicit refinement
       // TODO syntactic analysis of export sets is not quite right
-      // <xinhaoyuan@gmail.com> follow the CompileSignature for abstract signatures
-      var derivedSig = derived.Signature;
-      var originalSig = original.OriginalSignature;
-      while (originalSig.IsAbstract && originalSig.CompileSignature != null) originalSig = originalSig.CompileSignature;
-      while (derivedSig != null) {
-        while (derivedSig.IsAbstract && derivedSig.CompileSignature != null) derivedSig = derivedSig.CompileSignature;
-        if (derivedSig.ModuleDef == originalSig.ModuleDef) {
+      var derivedPointer = derived.Signature.ModuleDef;
+      var originalPointer = original.OriginalSignature.ModuleDef;
+      while (originalPointer.IsAbstract && originalPointer.Module != null) originalPointer = originalPointer.Module;
+      while (derivedPointer != null) {
+        while (derivedPointer.IsAbstract && derivedPointer.Module != null) derivedPointer = derivedPointer.Module;
+        if (derivedPointer == originalPointer) {
           HashSet<string> exports;
           if (derived is AliasModuleDecl) {
             exports = new HashSet<string>(((AliasModuleDecl)derived).Exports.ConvertAll(t => t.val));
@@ -294,7 +293,7 @@ namespace Microsoft.Dafny
           var oexports = new HashSet<string>(original.Exports.ConvertAll(t => t.val));
           return oexports.IsSubsetOf(exports);
         }
-        derivedSig = derivedSig.Refines;
+        derivedPointer = derivedPointer.RefinementBase;
       }
       return false;
     }
