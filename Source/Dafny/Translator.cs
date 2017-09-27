@@ -120,23 +120,21 @@ namespace Microsoft.Dafny {
       this.reporter = reporter;
     }
 
-    private void EstablishModuleScope(ModuleDefinition systemModule, ModuleDefinition m, ModuleSignature s){
+    private void EstablishModuleScope(ModuleDefinition systemModule, ModuleDefinition m){
       currentScope = new VisibilityScope();
       verificationScope = new VisibilityScope();
 
       currentScope.Augment(m.VisibilityScope);
       verificationScope.Augment(currentScope);
 
-      currentScope.Augment(s.VisibilityScope);
-      // <xinhaoyuan@gmail.com> use signature's scope
-      //currentScope.Augment(systemModule.VisibilityScope);
+      currentScope.Augment(systemModule.VisibilityScope);
 
-      //foreach (var decl in m.TopLevelDecls) {
-      //  if (decl is ModuleDecl && !(decl is ModuleExportDecl)) {
-      //    var mdecl = (ModuleDecl)decl;
-      //    currentScope.Augment(mdecl.AccessibleSignature().VisibilityScope);
-      //  }
-      //}
+      foreach (var decl in m.TopLevelDecls) {
+        if (decl is ModuleDecl && !(decl is ModuleExportDecl)) {
+          var mdecl = (ModuleDecl)decl;
+          currentScope.Augment(mdecl.AccessibleSignature().VisibilityScope);
+        }
+      }
 
     }
 
@@ -705,7 +703,7 @@ namespace Microsoft.Dafny {
       program = p;
       Type.EnableScopes();
 
-      EstablishModuleScope(p.BuiltIns.SystemModule, forModule, p.ModuleSigs[forModule]);
+      EstablishModuleScope(p.BuiltIns.SystemModule, forModule);
       Type.PushScope(this.currentScope);
 
       foreach (var w in program.BuiltIns.Bitwidths) {

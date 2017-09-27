@@ -845,8 +845,6 @@ namespace Microsoft.Dafny
             }
             return;
           }
-          // <xinhaoyuan@gmail.com> add imported module's scope into parent's scope
-          sig.VisibilityScope.Augment(importSig.VisibilityScope);
         } else if (d is LiteralModuleDecl) {
           var nested = (LiteralModuleDecl)d;
           if (!nested.ModuleDef.SuccessfullyResolved) {
@@ -855,8 +853,6 @@ namespace Microsoft.Dafny
             }
             return;
           }
-          // <xinhaoyuan@gmail.com> add sub-module's scope into parent's scope
-          sig.VisibilityScope.Augment(nested.Signature.VisibilityScope);
         }
       }
 
